@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>@CACOPHONY_BUNDLE_ID@</string>
+    <key>CFBundleName</key>
+    <string>Cacophony</string>
+    <key>CFBundleDisplayName</key>
+    <string>Cacophony</string>
+    <key>CFBundleExecutable</key>
+    <string>Cacophony</string>
+    <key>CFBundleIconFile</key>
+    <string>Cacophony</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@CACOPHONY_VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>@CMAKE_OSX_DEPLOYMENT_TARGET@</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Cacophony streams your Mac's audio to AirPlay speakers on your network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_airplay._tcp</string>
+        <string>_raop._tcp</string>
+    </array>
+</dict>
+</plist>

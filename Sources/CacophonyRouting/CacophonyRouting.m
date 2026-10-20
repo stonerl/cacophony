@@ -1,32 +1,7 @@
-#import "include/AirliftRouting.h"
+#import "CacophonyRouting.h"
 #import <objc/message.h>
 
-NSObject *ALCreateDiscoverySession(NSInteger features, NSInteger mode) {
-    Class cls = NSClassFromString(@"AVOutputDeviceDiscoverySession");
-    if (!cls) return nil;
-    id session = [cls alloc];
-    SEL initSel = NSSelectorFromString(@"initWithDeviceFeatures:");
-    if (![session respondsToSelector:initSel]) return nil;
-    id (*initFn)(id, SEL, NSInteger) = (id (*)(id, SEL, NSInteger))objc_msgSend;
-    session = initFn(session, initSel, features);
-    @try {
-        [session setValue:@(mode) forKey:@"discoveryMode"];
-    } @catch (id exception) {
-        return nil;
-    }
-    return session;
-}
-
-NSArray<NSObject *> *ALAvailableOutputDevices(NSObject *session) {
-    @try {
-        NSArray *devices = [session valueForKey:@"availableOutputDevices"];
-        return devices ?: @[];
-    } @catch (id exception) {
-        return @[];
-    }
-}
-
-id ALDeviceProperty(NSObject *device, NSString *key) {
+id CACDeviceProperty(NSObject *device, NSString *key) {
     @try {
         return [device valueForKey:key];
     } @catch (id exception) {
@@ -34,7 +9,7 @@ id ALDeviceProperty(NSObject *device, NSString *key) {
     }
 }
 
-NSObject *ALCreateAudioContext(void) {
+NSObject *CACCreateAudioContext(void) {
     Class cls = NSClassFromString(@"AVOutputContext");
     SEL sel = NSSelectorFromString(@"iTunesAudioContext");
     if (![cls respondsToSelector:sel]) return nil;
@@ -42,7 +17,7 @@ NSObject *ALCreateAudioContext(void) {
     return fn(cls, sel);
 }
 
-NSObject *ALDefaultSharedAudioContext(void) {
+NSObject *CACDefaultSharedAudioContext(void) {
     Class cls = NSClassFromString(@"AVOutputContext");
     SEL sel = NSSelectorFromString(@"defaultSharedOutputContext");
     if (![cls respondsToSelector:sel]) return nil;
@@ -50,7 +25,7 @@ NSObject *ALDefaultSharedAudioContext(void) {
     return fn(cls, sel);
 }
 
-NSString *ALContextID(NSObject *context) {
+NSString *CACContextID(NSObject *context) {
     @try {
         NSString *identifier = [context valueForKey:@"ID"];
         if (identifier) return identifier;
@@ -63,7 +38,7 @@ NSString *ALContextID(NSObject *context) {
     }
 }
 
-NSObject *ALContextForID(NSString *contextID) {
+NSObject *CACContextForID(NSString *contextID) {
     Class cls = NSClassFromString(@"AVOutputContext");
     SEL sel = NSSelectorFromString(@"outputContextForID:");
     if (![cls respondsToSelector:sel]) return nil;
@@ -71,7 +46,7 @@ NSObject *ALContextForID(NSString *contextID) {
     return fn(cls, sel, contextID);
 }
 
-BOOL ALPickerSetOutputContextID(NSObject *pickerView, NSString *contextID) {
+BOOL CACPickerSetOutputContextID(NSObject *pickerView, NSString *contextID) {
     SEL sel = NSSelectorFromString(@"setOutputContextID:");
     if (![pickerView respondsToSelector:sel]) return NO;
     void (*fn)(id, SEL, id) = (void (*)(id, SEL, id))objc_msgSend;
@@ -79,7 +54,7 @@ BOOL ALPickerSetOutputContextID(NSObject *pickerView, NSString *contextID) {
     return YES;
 }
 
-BOOL ALContextSetOutputDevices(NSObject *context, NSArray<NSObject *> *devices) {
+BOOL CACContextSetOutputDevices(NSObject *context, NSArray<NSObject *> *devices) {
     SEL sel = NSSelectorFromString(@"setOutputDevices:");
     if (![context respondsToSelector:sel]) return NO;
     void (*fn)(id, SEL, NSArray *) = (void (*)(id, SEL, NSArray *))objc_msgSend;
@@ -87,17 +62,7 @@ BOOL ALContextSetOutputDevices(NSObject *context, NSArray<NSObject *> *devices) 
     return YES;
 }
 
-BOOL ALContextAddOutputDevice(NSObject *context, NSObject *device,
-                              void (^completion)(void)) {
-    SEL sel = NSSelectorFromString(@"addOutputDevice:options:completionHandler:");
-    if (![context respondsToSelector:sel]) return NO;
-    void (*fn)(id, SEL, id, id, void (^)(void)) =
-        (void (*)(id, SEL, id, id, void (^)(void)))objc_msgSend;
-    fn(context, sel, device, nil, completion);
-    return YES;
-}
-
-NSArray<NSObject *> *ALContextOutputDevices(NSObject *context) {
+NSArray<NSObject *> *CACContextOutputDevices(NSObject *context) {
     @try {
         NSArray *devices = [context valueForKey:@"outputDevices"];
         if (devices.count > 0) return devices;
@@ -111,7 +76,57 @@ NSArray<NSObject *> *ALContextOutputDevices(NSObject *context) {
     return @[];
 }
 
-BOOL ALRendererSetOutputContext(AVSampleBufferAudioRenderer *renderer, NSObject *context) {
+void CACRendererAddToSynchronizer(NSObject *synchronizer, NSObject *renderer) {
+    SEL sel = NSSelectorFromString(@"addRenderer:");
+    if (![synchronizer respondsToSelector:sel]) return;
+    void (*fn)(id, SEL, id) = (void (*)(id, SEL, id))objc_msgSend;
+    fn(synchronizer, sel, renderer);
+}
+
+BOOL CACRendererIsReady(NSObject *renderer) {
+    SEL sel = NSSelectorFromString(@"isReadyForMoreMediaData");
+    if (![renderer respondsToSelector:sel]) return NO;
+    BOOL (*fn)(id, SEL) = (BOOL (*)(id, SEL))objc_msgSend;
+    return fn(renderer, sel);
+}
+
+void CACRendererEnqueue(NSObject *renderer, CMSampleBufferRef sampleBuffer) {
+    SEL sel = NSSelectorFromString(@"enqueueSampleBuffer:");
+    if (![renderer respondsToSelector:sel]) return;
+    void (*fn)(id, SEL, CMSampleBufferRef) = (void (*)(id, SEL, CMSampleBufferRef))objc_msgSend;
+    fn(renderer, sel, sampleBuffer);
+}
+
+void CACRendererStopRequesting(NSObject *renderer) {
+    SEL sel = NSSelectorFromString(@"stopRequestingMediaData");
+    if (![renderer respondsToSelector:sel]) return;
+    void (*fn)(id, SEL) = (void (*)(id, SEL))objc_msgSend;
+    fn(renderer, sel);
+}
+
+void CACRendererFlush(NSObject *renderer) {
+    SEL sel = NSSelectorFromString(@"flush");
+    if (![renderer respondsToSelector:sel]) return;
+    void (*fn)(id, SEL) = (void (*)(id, SEL))objc_msgSend;
+    fn(renderer, sel);
+}
+
+BOOL CACRendererFailed(NSObject *renderer) {
+    SEL sel = NSSelectorFromString(@"status");
+    if (![renderer respondsToSelector:sel]) return NO;
+    NSInteger (*fn)(id, SEL) = (NSInteger (*)(id, SEL))objc_msgSend;
+    return fn(renderer, sel) == AVQueuedSampleBufferRenderingStatusFailed;
+}
+
+NSString *CACRendererErrorMessage(NSObject *renderer) {
+    SEL sel = NSSelectorFromString(@"error");
+    if (![renderer respondsToSelector:sel]) return nil;
+    id (*fn)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
+    NSError *error = fn(renderer, sel);
+    return error.localizedDescription;
+}
+
+BOOL CACRendererSetOutputContext(AVSampleBufferAudioRenderer *renderer, NSObject *context) {
     SEL sel = NSSelectorFromString(@"setOutputContext:");
     if (![renderer respondsToSelector:sel]) return NO;
     void (*fn)(id, SEL, id) = (void (*)(id, SEL, id))objc_msgSend;
@@ -119,7 +134,7 @@ BOOL ALRendererSetOutputContext(AVSampleBufferAudioRenderer *renderer, NSObject 
     return YES;
 }
 
-BOOL ALDeviceSetVolume(NSObject *device, float volume) {
+BOOL CACDeviceSetVolume(NSObject *device, float volume) {
     SEL sel = NSSelectorFromString(@"setDeviceVolume:");
     if ([device respondsToSelector:sel]) {
         void (*fn)(id, SEL, float) = (void (*)(id, SEL, float))objc_msgSend;

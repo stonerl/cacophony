@@ -2,22 +2,28 @@
 import PackageDescription
 
 let package = Package(
-    name: "airlift",
-    platforms: [.macOS(.v15)],
+    name: "cacophony",
+    platforms: [.macOS("27.0")],
     targets: [
         .target(
-            name: "AirliftRouting",
-            path: "Sources/AirliftRouting",
+            name: "CacophonyRouting",
+            path: "Sources/CacophonyRouting",
+            publicHeadersPath: ".",
             cSettings: [
                 // Hand-rolled objc_msgSend calls to init-family selectors are
                 // incompatible with ARC's retain/release bookkeeping.
                 .unsafeFlags(["-fno-objc-arc"])
             ]
         ),
+        .target(
+            name: "CacophonyProtocol",
+            path: "Sources/CacophonyProtocol",
+            publicHeadersPath: "."
+        ),
         .executableTarget(
-            name: "airlift",
-            dependencies: ["AirliftRouting"],
-            path: "Sources/airlift"
+            name: "cacophony",
+            dependencies: ["CacophonyRouting", "CacophonyProtocol"],
+            path: "Sources/Cacophony"
         ),
     ]
 )

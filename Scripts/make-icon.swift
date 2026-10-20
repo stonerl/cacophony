@@ -3,7 +3,7 @@ import AppKit
 import Foundation
 
 // Draw at each native resolution so the small Finder icons remain crisp.
-let destination = CommandLine.arguments.dropFirst().first ?? "build/Airlift.iconset"
+let destination = CommandLine.arguments.dropFirst().first ?? "build/Cacophony.iconset"
 try FileManager.default.createDirectory(atPath: destination, withIntermediateDirectories: true)
 for size in [16, 32, 128, 256, 512] {
     for scale in [1, 2] {
@@ -17,7 +17,7 @@ for size in [16, 32, 128, 256, 512] {
         (transform as NSAffineTransform).concat()
         let tile = NSBezierPath(roundedRect: NSRect(x: 64, y: 64, width: 896, height: 896),
                                 xRadius: 200, yRadius: 200)
-        // Spotify's bright green (#1ED760) with a near-black mark (#121212).
+        // Bright green (#1ED760) with a near-black mark (#121212).
         NSColor(calibratedRed: 30.0 / 255, green: 215.0 / 255, blue: 96.0 / 255, alpha: 1).setFill()
         tile.fill()
         NSColor(calibratedWhite: 18.0 / 255, alpha: 1).set()

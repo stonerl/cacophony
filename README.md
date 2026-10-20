@@ -1,106 +1,122 @@
-# Airlift
+# Cacophony
 
-Pipe audio from any macOS app (e.g. Spotify) to one or more AirPlay 2 speakers
-— HomePods included — in sync. macOS can only AirPlay *all* system audio to
-*one* speaker; Airlift streams a single app to several, using the OS's own
-AirPlay 2 engine.
+System-wide AirPlay 2 output for macOS. Cacophony installs a virtual CoreAudio
+output device named **Cacophony** and streams everything played to it to one or
+more AirPlay 2 speakers, in sync.
 
-## How it works
+macOS only lets the system output go to a single AirPlay speaker. Cacophony
+adds the missing output device and uses macOS's own AirPlay 2 engine for the
+multi-room part.
 
-- **Capture** — a Core Audio *process tap* (`AudioHardwareCreateProcessTap`,
-  macOS 14.2+) grabs one app's audio and mutes it locally while streaming.
-- **Render** — the tapped PCM feeds an `AVSampleBufferAudioRenderer` via a
-  ring buffer.
-- **Route** — the renderer is attached to a private `AVOutputContext`. Speaker
-  selection uses the *system* AirPlay picker (`AVRoutePickerView` +
-  `setOutputContextID:` SPI): the picker UI runs inside Apple's entitled
-  `AirPlayUIAgent`, which is allowed to attach HomePods to our context. The OS
-  (`airplayd`) then owns the AirPlay 2 group, so multi-room stays in sync and
-  protocol changes remain Apple's problem.
+## Requirements
 
-Why the picker instead of programmatic selection: enumerating AirPlay devices
-(`AVOutputDeviceDiscoverySession`) is gated by the Apple-restricted
-`com.apple.avfoundation.allows-access-to-device-list` entitlement — unentitled
-apps get an empty device list while the daemon happily discovers on their
-behalf. Selecting is gated too: `-[AVOutputContext setOutputDevices:]` from an
-unentitled process fails with `-12023`, even with live device objects taken
-from an already-routed context, and MediaRemote's discovery sessions also come
-back empty. The picker sidesteps both gates with native UI, which is also why
-its list can't be filtered to HomePods or pre-selected.
+- macOS 27
+- Xcode 27 / Swift 6
+- CMake 3.28 or newer
+- Admin rights to install the HAL driver
 
-> ⚠️ This uses private API (`AVOutputContext`, route-picker SPI) resolved at
-> runtime. It's for personal use; expect breakage on OS updates.
-
-## Build & run
+## Build
 
 ```sh
-Scripts/make-app.sh     # swift build + wraps build/Airlift.app (ad-hoc signed)
-open build/Airlift.app
+git submodule update --init --recursive
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target app
+open build/Cacophony.app
 ```
 
-Airlift streams automatically: it starts streaming whenever the source app
-plays and stops when it goes quiet. If no speakers are selected when playback
-starts, it pops up the native AirPlay picker (AirPlay 2 speakers
-multi-select). Quit Airlift to play locally again.
-
-Menu bar (AirPlay icon, full-strength while streaming, dimmed while idle):
-**Choose Speakers…** reopens the picker, **Pause Airlift** suspends streaming
-until resumed, **Stream From** picks the source app, **Launch at Login**
-registers the app as a login item. Approve the Local Network and audio-capture
-permission prompts on first use.
-
-The same binary is also a CLI:
+The `app` target builds the Swift app, builds and signs the driver, assembles
+`Cacophony.app`, embeds the driver, and signs the app. To use a Developer ID
+certificate, configure with:
 
 ```sh
-airlift devices                          # list Core Audio output devices
-airlift record Spotify 5 out.wav         # tap an app to a file
-airlift play Spotify 30 "Studio Display" # tap → local output device(s)
-airlift context-play Spotify 10          # tap → renderer/context path
-airlift ctl start [app] | stop           # remote-control the menu bar app
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCODESIGN_ID="Developer ID Application: Your Name (TEAMID)"
+cmake --build build --target app
 ```
 
-Logs: `~/Library/Logs/airlift.log`.
+## Install the driver
 
-## Behavior notes
+From the menu bar panel: **Install Driver…** and approve the admin prompt.
+The app restarts `coreaudiod`, so audio stops for a moment. Cacophony detects the device automatically; no app restart is needed.
 
-- The tap (which mutes the source app locally) stays up while the source app
-  runs and speakers are selected. The renderer only exists while the app is
-  audible: the first audible buffer starts it, 30 s of silence stops it and
-  releases the speakers.
-- With no speakers selected the tap only listens: the source app plays
-  locally as usual, and the picker opens when it starts playing (once per
-  stretch of playback).
-- A reconcile loop (2 s tick, plus app launch/quit, Core Audio process-list
-  and route-change events) re-taps when the source app quits/relaunches and
-  restarts a failed renderer.
-- Speaker picks don't survive an app restart (the route lives on a context
-  that dies with the process, and can't be re-selected programmatically) —
-  Airlift asks again the next time the source app plays.
-- Expect ~2 s of AirPlay latency; source-app volume applies upstream of the
-  stream, per-speaker volume via the picker/Home app.
-- While streaming Spotify, the menu bar app reads its current track locally
-  every 2 s and publishes title, artist, album, and artwork to Now Playing.
-  Approve the macOS Automation prompt to let Airlift read Spotify; no Spotify
-  account login or Web API setup is needed. Artwork downloads from the URL
-  Spotify supplies. Track progress and remote playback commands are not yet
-  implemented. If metadata is unavailable (or another app is selected), it
-  falls back to **Spotify via Airlift** (or that app's name), with the Mac's
-  name underneath. Metadata clears when streaming ends, including the usual
-  30 s silence timeout. Metadata delivery to HomePod and Apple Watch has
-  been verified during streaming.
-  The menu also shows **Title — Artist** on a separate line while Spotify
-  metadata is available; long titles are shortened with the full text in a
-  tooltip.
+Or install from Terminal with CMake:
 
-## Layout
+```sh
+sudo cmake --build build --target install-driver
+```
 
-- `Sources/airlift/` — CLI + menu bar app (tap, ring buffer, renderer,
-  reconcile loop).
-- `Sources/AirliftRouting/` — ObjC shim over the private routing classes,
-  resolved via `NSClassFromString`/`objc_msgSend`; compiled `-fno-objc-arc`
-  (hand-rolled `init` msgSends are incompatible with ARC bookkeeping).
-- `Scripts/make-app.sh` — app-bundle wrapper (bundle identity is what makes
-  TCC's Local Network permission work).
-- `Resources/Airlift.icns` — app icon. To regenerate after editing the artwork,
-  run `swift Scripts/make-icon.swift` followed by
-  `iconutil -c icns build/Airlift.iconset -o Resources/Airlift.icns`.
+Uninstall with the **Uninstall Driver…** button or:
+
+```sh
+sudo cmake --build build --target uninstall-driver
+```
+
+## Use
+
+1. Install the driver.
+2. Click the Cacophony menu bar icon, then click the AirPlay icon beside the
+   status line. Select one or several AirPlay 2 speakers. The list is the
+   system AirPlay picker, so pairing and multi-room grouping are handled by
+   macOS.
+3. Selecting speakers automatically makes Cacophony the system output.
+   Deselecting all speakers restores the previous output. While speakers stay
+   selected, you can still choose another output manually.
+4. Play audio. The panel shows the selected speakers and per-speaker volume.
+
+Quitting Cacophony restores the previous system output when Cacophony is current.
+Enable **Launch at Login** so Cacophony is running whenever Cacophony is selected
+as the output.
+
+## Architecture
+
+```
+Apps → CacophonyDriver.driver (CoreAudio HAL plugin, in coreaudiod)
+        │ localhost UDP, 48 kHz stereo Float32, sequence + timestamps
+        ▼
+   Cacophony.app (menu bar helper)
+        ├─ ring buffer
+        └─ AVSampleBufferAudioRenderer
+              └─ private AVOutputContext → airplayd → AirPlay 2 group
+```
+
+- **Driver** — a CoreAudio AudioServerPlugIn built with
+  [libASPL](https://github.com/gavv/libASPL). It publishes a 48 kHz, stereo,
+  Float32 output device and sends the mixed output to `127.0.0.1:47833`.
+- **Helper** — receives the PCM, buffers it, and feeds an
+  `AVSampleBufferAudioRenderer` attached to a private `AVOutputContext`.
+  `airplayd` owns the AirPlay 2 session, buffering, pairing, and multi-room
+  synchronization.
+- **Speaker picker** — `AVRoutePickerView` plus the private
+  `setOutputContextID:` SPI. The picker runs in Apple's entitled
+  `AirPlayUIAgent`; that is how an unentitled app can select HomePods.
+
+The protocol header lives in `Sources/CacophonyProtocol/include/CacophonyProtocol.h`.
+
+## Limitations
+
+- Uses private API (`AVOutputContext`, route-picker SPI). It is for personal
+  use, not the App Store, and can break on macOS updates.
+- Speaker selections cannot be restored programmatically. After restarting
+  Cacophony, choose speakers again. Keeping Cacophony running avoids this.
+- AirPlay buffers about two seconds. Music is fine; video and games will be out
+  of sync.
+- If Cacophony is the system output and the helper is not running, audio is
+  silent. Use Launch at Login, and quit from the menu so the previous output is
+  restored.
+- The driver installs into `/Library/Audio/Plug-Ins/HAL` and requires admin
+  rights. Installing or updating it restarts `coreaudiod`.
+
+## Why not an AUv3 plug-in?
+
+This project started from an AUv3 skeleton, but AUv3 plug-ins run inside a host
+app and never become system output devices. A system output device must be a
+CoreAudio HAL driver. The AUv3 extension target is not used.
+
+## Credits
+
+Cacophony is based on [Airlift](https://github.com/jgarms/airlift) (MIT) for the
+AirPlay 2 routing and speaker picker, and uses
+[libASPL](https://github.com/gavv/libASPL) (MIT) for the HAL driver. See
+`THIRD_PARTY_NOTICES.md`.
+
+AirPlay, HomePod, and macOS are trademarks of Apple Inc.

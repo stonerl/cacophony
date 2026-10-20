@@ -80,26 +80,6 @@ extension AudioObjectID {
         return Array(buffer)
     }
 
-    /// Core Audio process object for a running pid, or nil if the process
-    /// hasn't registered with coreaudiod.
-    static func processObject(for pid: pid_t) throws -> AudioObjectID? {
-        var address = propertyAddress(kAudioHardwarePropertyTranslatePIDToProcessObject)
-        var qualifier = pid
-        var object = AudioObjectID(kAudioObjectUnknown)
-        var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        try check(
-            withUnsafeMutablePointer(to: &qualifier) { qualifierPtr in
-                AudioObjectGetPropertyData(
-                    .system, &address,
-                    UInt32(MemoryLayout<pid_t>.size), qualifierPtr,
-                    &size, &object
-                )
-            },
-            "TranslatePIDToProcessObject(\(pid))"
-        )
-        return object == kAudioObjectUnknown ? nil : object
-    }
-
     static func defaultOutputDevice() throws -> AudioObjectID {
         try AudioObjectID.system.read(
             kAudioHardwarePropertyDefaultOutputDevice,
@@ -111,22 +91,24 @@ extension AudioObjectID {
         try AudioObjectID.system.readArray(kAudioHardwarePropertyDevices)
     }
 
-    var outputChannelCount: Int {
-        var address = propertyAddress(kAudioDevicePropertyStreamConfiguration, scope: kAudioObjectPropertyScopeOutput)
-        var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(self, &address, 0, nil, &size) == noErr, size > 0 else { return 0 }
-        let raw = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment)
-        defer { raw.deallocate() }
-        guard AudioObjectGetPropertyData(self, &address, 0, nil, &size, raw) == noErr else { return 0 }
-        let list = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
-        return list.reduce(0) { $0 + Int($1.mNumberChannels) }
-    }
+    static func setDefaultOutputDevice(_ device: AudioObjectID) throws {
+        var value = device
+        var address = propertyAddress(kAudioHardwarePropertyDefaultOutputDevice)
+        try check(
+            AudioObjectSetPropertyData(
+                .system, &address, 0, nil,
+                UInt32(MemoryLayout<AudioObjectID>.size), &value
+            ),
+            "SetDefaultOutputDevice"
+        )
 
-    var deviceUID: String {
-        (try? readString(kAudioDevicePropertyDeviceUID)) ?? ""
-    }
-
-    var objectName: String {
-        (try? readString(kAudioObjectPropertyName)) ?? ""
+        address = propertyAddress(kAudioHardwarePropertyDefaultSystemOutputDevice)
+        try check(
+            AudioObjectSetPropertyData(
+                .system, &address, 0, nil,
+                UInt32(MemoryLayout<AudioObjectID>.size), &value
+            ),
+            "SetDefaultSystemOutputDevice"
+        )
     }
 }

@@ -1,6 +1,8 @@
+import CacophonyRouting
 import AVFoundation
 import CoreMedia
 import Foundation
+import Synchronization
 
 /// Plays a live interleaved Float32 stream through AVSampleBufferAudioRenderer,
 /// which is the pipeline that can be attached to an (private) AVOutputContext
@@ -10,28 +12,26 @@ final class RendererOutput {
     private let synchronizer = AVSampleBufferRenderSynchronizer()
     private let ring: RingBuffer
     private let format: AVAudioFormat
-    private let queue = DispatchQueue(label: "airlift.renderer")
+    private let queue = DispatchQueue(label: "cacophony.renderer")
     private var timer: DispatchSourceTimer?
     private var formatDescription: CMAudioFormatDescription?
-    private var framesEnqueued: Int64 = 0
+    private let framesEnqueued = Atomic<Int64>(0)
     private var started = false
+
+    /// Frames handed to the renderer. Used to detect a stuck connection.
+    var enqueuedFrames: Int64 { framesEnqueued.load(ordering: .relaxed) }
+
+    /// Timer ticks that found the renderer ready and the source ring empty.
+    let ringEmptyTicks = Atomic<Int>(0)
 
     /// Frames to accumulate before starting the clock (AirPlay needs preroll).
     private let prerollFrames: Int
     private let chunkFrames = 4800
 
-    /// Pass `ring` to render from a buffer that outlives this renderer.
-    init(format: AVAudioFormat, ring: RingBuffer? = nil, bufferSeconds: Double = 4.0, prerollSeconds: Double = 0.5) {
+    init(format: AVAudioFormat, ring: RingBuffer, prerollSeconds: Double = 0.5) {
         self.format = format
-        self.ring = ring ?? RingBuffer(
-            channelCount: Int(format.channelCount),
-            capacityFrames: Int(format.sampleRate * bufferSeconds)
-        )
+        self.ring = ring
         self.prerollFrames = Int(format.sampleRate * prerollSeconds)
-    }
-
-    func enqueue(_ samples: UnsafePointer<Float>, frameCount: Int) {
-        ring.write(samples, frameCount: frameCount)
     }
 
     func start() throws {
@@ -52,7 +52,7 @@ final class RendererOutput {
         )
         formatDescription = description
 
-        synchronizer.addRenderer(renderer)
+        CACRendererAddToSynchronizer(synchronizer, renderer)
 
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now(), repeating: .milliseconds(50))
@@ -67,9 +67,12 @@ final class RendererOutput {
             synchronizer.setRate(1.0, time: .zero)
             started = true
         }
-        while renderer.isReadyForMoreMediaData, ring.framesAvailable >= chunkFrames {
+        if started, CACRendererIsReady(renderer), ring.framesAvailable == 0 {
+            ringEmptyTicks.store(ringEmptyTicks.load(ordering: .relaxed) + 1, ordering: .relaxed)
+        }
+        while CACRendererIsReady(renderer), ring.framesAvailable >= chunkFrames {
             guard let sampleBuffer = makeSampleBuffer(frameCount: chunkFrames) else { return }
-            renderer.enqueue(sampleBuffer)
+            CACRendererEnqueue(renderer, sampleBuffer)
         }
     }
 
@@ -91,19 +94,30 @@ final class RendererOutput {
             blockBufferOut: &blockBuffer
         ) == kCMBlockBufferNoErr, let blockBuffer else { return nil }
 
-        var scratch = [Float](repeating: 0, count: frameCount * channelCount)
-        scratch.withUnsafeMutableBufferPointer { ptr in
-            ring.read(into: ptr.baseAddress!, frameCount: frameCount)
-            _ = CMBlockBufferReplaceDataBytes(
-                with: ptr.baseAddress!,
-                blockBuffer: blockBuffer,
-                offsetIntoDestination: 0,
-                dataLength: byteCount
-            )
-        }
+        var lengthAtOffset = 0
+        var totalLength = 0
+        var dataPointer: UnsafeMutablePointer<CChar>?
+        guard CMBlockBufferGetDataPointer(
+            blockBuffer,
+            atOffset: 0,
+            lengthAtOffsetOut: &lengthAtOffset,
+            totalLengthOut: &totalLength,
+            dataPointerOut: &dataPointer
+        ) == kCMBlockBufferNoErr,
+        let dataPointer,
+        lengthAtOffset >= byteCount
+        else { return nil }
+
+        ring.read(
+            into: UnsafeMutableRawPointer(dataPointer).assumingMemoryBound(to: Float.self),
+            frameCount: frameCount
+        )
 
         var sampleBuffer: CMSampleBuffer?
-        let pts = CMTime(value: framesEnqueued, timescale: CMTimeScale(format.sampleRate))
+        let pts = CMTime(
+            value: framesEnqueued.load(ordering: .relaxed),
+            timescale: CMTimeScale(format.sampleRate)
+        )
         guard CMAudioSampleBufferCreateReadyWithPacketDescriptions(
             allocator: kCFAllocatorDefault,
             dataBuffer: blockBuffer,
@@ -114,18 +128,19 @@ final class RendererOutput {
             sampleBufferOut: &sampleBuffer
         ) == noErr, let sampleBuffer else { return nil }
 
-        framesEnqueued += Int64(frameCount)
+        framesEnqueued.store(
+            framesEnqueued.load(ordering: .relaxed) + Int64(frameCount),
+            ordering: .relaxed
+        )
         return sampleBuffer
     }
-
-    var framesPlayed: Int64 { framesEnqueued }
 
     func stop() {
         timer?.cancel()
         timer = nil
         queue.sync {}  // let an in-flight pump finish before the ring is reused
         synchronizer.setRate(0, time: .zero)
-        renderer.stopRequestingMediaData()
-        renderer.flush()
+        CACRendererStopRequesting(renderer)
+        CACRendererFlush(renderer)
     }
 }

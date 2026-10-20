@@ -1,0 +1,65 @@
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    cmake_minimum_required(VERSION 3.28)
+    project(CacophonyDriver LANGUAGES CXX)
+endif()
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "27.0")
+endif()
+
+set(DRIVER_NAME "CacophonyDriver")
+if(NOT CACOPHONY_VERSION)
+  set(CACOPHONY_VERSION "0.1.0")
+endif()
+set(DRIVER_VERSION "${CACOPHONY_VERSION}")
+set(DRIVER_COPYRIGHT "Copyright © 2026 Toni Förster")
+set(DRIVER_IDENTIFIER "com.stonerl.Cacophony.Driver")
+set(DRIVER_UID "A7E4C1D2-3B5F-4A6C-8D9E-0F1A2B3C4D5E")
+set(DRIVER_ENTRYPOINT "CacophonyDriverEntryPoint")
+
+set(LIBASPL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../Vendor/libASPL" CACHE PATH "libASPL source directory")
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+add_subdirectory("${LIBASPL_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/libASPL")
+
+add_library(${DRIVER_NAME} MODULE
+  "CacophonyDriver.cpp"
+  )
+
+target_include_directories(${DRIVER_NAME} PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/../Sources/CacophonyProtocol"
+  )
+
+target_link_libraries(${DRIVER_NAME} PRIVATE
+  libASPL
+  "-framework CoreFoundation"
+  )
+
+set_target_properties(${DRIVER_NAME} PROPERTIES
+  OUTPUT_NAME "${DRIVER_NAME}"
+  BUNDLE true
+  BUNDLE_EXTENSION "driver"
+  PREFIX ""
+  SUFFIX ""
+  MACOSX_BUNDLE ON
+  MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
+  MACOSX_BUNDLE_BUNDLE_NAME "${DRIVER_NAME}"
+  MACOSX_BUNDLE_BUNDLE_VERSION "${DRIVER_VERSION}"
+  MACOSX_BUNDLE_COPYRIGHT "${DRIVER_COPYRIGHT}"
+  MACOSX_BUNDLE_GUI_IDENTIFIER "${DRIVER_IDENTIFIER}"
+  MACOSX_BUNDLE_SHORT_VERSION_STRING "${DRIVER_VERSION}"
+  )
+
+if(NOT CODESIGN_ID STREQUAL "")
+  add_custom_command(
+    TARGET ${DRIVER_NAME}
+    POST_BUILD
+    COMMENT "Signing ${DRIVER_NAME}.driver with ${CODESIGN_ID}"
+    VERBATIM
+    COMMAND codesign --force --sign "${CODESIGN_ID}" --timestamp=none
+      "${CMAKE_CURRENT_BINARY_DIR}/${DRIVER_NAME}.driver"
+    )
+endif()
