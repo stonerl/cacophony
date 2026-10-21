@@ -49,7 +49,7 @@ notarize:
 	$(CMAKE) --build "$(BUILD_DIR)" --target notarize
 
 run: app
-	open "$(BUILD_DIR)/Cacophony.app"
+	open --env CACOPHONY_ALLOW_UNSAFE_PATH=1 "$(BUILD_DIR)/Cacophony.app"
 
 clean:
 	rm -rf "$(BUILD_DIR)"

@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
     private var controller: SystemAudioController!
 
     private static let launchAtLoginConfiguredKey = "launchAtLoginConfigured"
+    private static let allowUnsafePathEnvironmentKey = "CACOPHONY_ALLOW_UNSAFE_PATH"
     private var panel: StatusPanel? { panelView?.panel }
 
     private let streamingIcon = NSImage(systemSymbolName: "airplayaudio", accessibilityDescription: "Cacophony")
@@ -55,6 +56,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
         if let id = CACContextID(context) { defaults.set(id, forKey: "contextID") }
         alog("context \(context) id=\(CACContextID(context) ?? "nil")")
         controller = makeController(context: context)
+
+        guard isRunningFromApplications else {
+            promptForInvalidInstallLocation()
+            return
+        }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.toolTip = "Cacophony"
@@ -116,6 +122,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
                 self?.promptForDriverInstall()
             }
         }
+    }
+
+    private var isRunningFromApplications: Bool {
+        if ProcessInfo.processInfo.environment[Self.allowUnsafePathEnvironmentKey] != nil {
+            return true
+        }
+        let bundleURL = Bundle.main.bundleURL.resolvingSymlinksInPath().standardizedFileURL
+        let parentPath = bundleURL.deletingLastPathComponent().path
+        return parentPath.caseInsensitiveCompare("/Applications") == .orderedSame
+    }
+
+    private func promptForInvalidInstallLocation() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Cacophony is not in /Applications"
+        alert.informativeText = "Driver installation and Launch at Login require this location. Move the app there, then open it again."
+        alert.addButton(withTitle: "Quit")
+        alert.runModal()
+        alog("invalid install location: \(Bundle.main.bundleURL.path)")
+        NSApp.terminate(nil)
     }
 
     private func makeController(context: NSObject) -> SystemAudioController {

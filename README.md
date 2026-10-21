@@ -46,6 +46,9 @@ make run
 make distclean
 ```
 
+`make run` launches the development build with the `/Applications` guard
+disabled.
+
 For local signing settings, create an ignored `Makefile.local`:
 
 ```make
@@ -88,9 +91,10 @@ approve Cacophony in System Settings > General > Login Items & Extensions. Core
 Audio restarts, so audio stops briefly. Cacophony detects the device
 automatically; no app restart is needed.
 
-The SMAppService helper is most reliable when `Cacophony.app` is in
-`/Applications`. Apps containing LaunchDaemons must be notarized, so build the
-notarized package before testing the in-app installer.
+`Cacophony.app` must run from `/Applications` for the SMAppService helper and
+Launch at Login to work reliably. If it is launched from anywhere else,
+Cacophony shows a warning and quits. Apps containing LaunchDaemons must be
+notarized, so build the notarized package before testing the in-app installer.
 
 ## Use
 
