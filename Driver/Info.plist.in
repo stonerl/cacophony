@@ -39,7 +39,7 @@
 		</array>
 	</dict>
 	<key>LSMinimumSystemVersion</key>
-	<string>27.0</string>
+	<string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>${MACOSX_BUNDLE_COPYRIGHT}</string>
 	<key>NSPrincipalClass</key>
