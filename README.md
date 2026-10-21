@@ -1,8 +1,11 @@
 # Cacophony
 
 System-wide AirPlay 2 output for macOS. Cacophony installs a virtual CoreAudio
-output device named **Cacophony** and streams everything played to it to one or
-more AirPlay 2 speakers, in sync.
+output device named **Cacophony** and streams everything played through it to
+one or more AirPlay 2 speakers, in sync.
+
+Cacophony operates on the Mac's system output as a whole, not on individual
+apps. Audio from all apps using the selected output is mixed together.
 
 macOS only lets the system output go to a single AirPlay speaker. Cacophony
 adds the missing output device and uses macOS's own AirPlay 2 engine for the
@@ -10,19 +13,71 @@ multi-room part.
 
 ## Requirements
 
-- macOS 26
+- macOS 26 or later
+- `Cacophony.app` in `/Applications`
+- Administrator approval for driver installation
+- AirPlay 2-compatible speakers on the same network
+
+For development:
+
 - Xcode 27 / Swift 6
 - CMake 3.28 or newer
-- Admin rights to install the HAL driver
+- Git submodules
+
+## Install
+
+1. Download `Cacophony-1.0.0.zip`.
+2. Move `Cacophony.app` to `/Applications`.
+3. Launch Cacophony.
+4. When prompted, click **Install** to install the audio driver.
+5. Approve the background helper in **System Settings → General → Login Items & Extensions** if prompted.
+6. Click the Cacophony menu bar icon and select your AirPlay speakers.
+
+If you choose **Later**, you can install the driver from the right-click menu.
+
+Cacophony must run from `/Applications` for the SMAppService helper and Launch
+at Login to work reliably. If launched elsewhere, it shows a warning and quits.
+
+## Use
+
+Left-click the Cacophony menu bar icon to open the audio panel. Right-click or
+Control-click it to open the menu for driver management, Launch at Login, and
+Quit.
+
+1. Click the AirPlay icon beside the status line and select one or more AirPlay 2 speakers. The system picker handles pairing and multi-room grouping.
+2. Selecting speakers automatically makes Cacophony the system output. Deselecting all speakers restores the previous output. You can still choose another output manually while speakers remain selected.
+3. Play audio. The panel shows the selected speakers and per-speaker volume.
+
+Launch at Login is enabled on first launch and can be changed from the
+right-click menu. Quitting Cacophony restores the previous system output when
+Cacophony is current.
+
+## Driver management
+
+The driver is installed and removed entirely from the app; there are no CMake
+or terminal driver install targets.
+
+- **Install Driver…** – installs or updates the bundled driver.
+- **Uninstall Driver…** – removes the driver and unregisters the helper.
+- Installing or updating the driver briefly restarts Core Audio.
+
+## Uninstall
+
+1. Right-click the Cacophony menu bar icon and choose **Uninstall Driver…**.
+2. Disable **Launch at Login** from the same menu.
+3. Quit Cacophony.
+4. Remove `Cacophony.app` from `/Applications`.
 
 ## Build
 
 ```sh
 git submodule update --init --recursive
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target app
-open build/Cacophony.app
+make app
+make run
 ```
+
+`make run` launches the development build with the `/Applications` guard
+disabled. To launch the built app normally, copy it to `/Applications` first.
 
 The app and driver version come from the root `VERSION` file.
 
@@ -36,6 +91,10 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build --target app
 ```
 
+For development, launch the development build with `make run`. The in-app
+driver installer requires a notarized app; use the notarized build when testing
+helper approval or driver installation.
+
 ## Make targets
 
 A thin `Makefile` wraps the CMake targets for editors that discover Makefiles:
@@ -43,13 +102,15 @@ A thin `Makefile` wraps the CMake targets for editors that discover Makefiles:
 ```sh
 make configure
 make app
+make driver
+make icon
 make notarize
 make run
 make distclean
 ```
 
-`make run` launches the development build with the `/Applications` guard
-disabled.
+`make clean` removes the CMake build directory. `make distclean` removes both
+the CMake and SwiftPM build artifacts.
 
 For local signing settings, create an ignored `Makefile.local`:
 
@@ -71,54 +132,22 @@ xcrun notarytool store-credentials cacophony-notary \
   --password "app-specific-password"
 ```
 
-Then configure and build:
+Then configure and notarize:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DCODESIGN_ID="Developer ID Application: Your Name (TEAMID)" \
-  -DNOTARY_PROFILE=cacophony-notary
-cmake --build build --target notarize
+make notarize
 ```
 
-The `notarize` target re-signs the embedded driver and app with a secure
-timestamp and hardened runtime, submits a zip, staples the ticket, and writes
-`build/Cacophony-<version>.zip`. Credentials stay in the keychain, not in the
-repository.
+The notarize target rebuilds the app, signs it with a secure timestamp and
+hardened runtime, submits it, staples the ticket, and writes
+`build/Cacophony-<version>.zip`. `build/Cacophony.zip` is the temporary
+notarization upload and is not the distribution artifact.
 
-## Install the driver
-
-Right-click or Control-click the Cacophony menu bar icon and choose
-**Install Driver…**. Cacophony registers a background helper; if macOS asks,
-approve Cacophony in System Settings > General > Login Items & Extensions. Core
-Audio restarts, so audio stops briefly. Cacophony detects the device
-automatically; no app restart is needed.
-
-`Cacophony.app` must run from `/Applications` for the SMAppService helper and
-Launch at Login to work reliably. If it is launched from anywhere else,
-Cacophony shows a warning and quits. Apps containing LaunchDaemons must be
-notarized, so build the notarized package before testing the in-app installer.
-
-## Use
-
-1. Install the driver.
-2. Click the Cacophony menu bar icon, then click the AirPlay icon beside the
-   status line. Select one or several AirPlay 2 speakers. The list is the
-   system AirPlay picker, so pairing and multi-room grouping are handled by
-   macOS.
-3. Selecting speakers automatically makes Cacophony the system output.
-   Deselecting all speakers restores the previous output. While speakers stay
-   selected, you can still choose another output manually.
-4. Play audio. The panel shows the selected speakers and per-speaker volume.
-
-Quitting Cacophony restores the previous system output when Cacophony is current.
-Cacophony enables **Launch at Login** on first launch; right-click or
-Control-click the menu bar icon to change it.
-
-The menu also contains the driver actions and **Quit Cacophony**.
+Credentials stay in the keychain, not in the repository.
 
 ## Architecture
 
-```
+```text
 Apps → CacophonyAudio.driver (CoreAudio HAL plugin, in coreaudiod)
         │ localhost UDP, 48 kHz stereo Float32, sequence + timestamps
         ▼
@@ -128,37 +157,44 @@ Apps → CacophonyAudio.driver (CoreAudio HAL plugin, in coreaudiod)
               └─ private AVOutputContext → airplayd → AirPlay 2 group
 ```
 
-- **Driver** — a CoreAudio AudioServerPlugIn built with
+- **Driver** – a CoreAudio AudioServerPlugIn built with
   [libASPL](https://github.com/gavv/libASPL). It publishes a 48 kHz, stereo,
   Float32 output device and sends the mixed output to `127.0.0.1:47833`.
-- **Helper** — receives the PCM, buffers it, and feeds an
+- **App** – receives the PCM, buffers it, and feeds an
   `AVSampleBufferAudioRenderer` attached to a private `AVOutputContext`.
   `airplayd` owns the AirPlay 2 session, buffering, pairing, and multi-room
   synchronization.
-- **Speaker picker** — `AVRoutePickerView` plus the private
+- **Speaker picker** – `AVRoutePickerView` plus the private
   `setOutputContextID:` SPI. The picker runs in Apple's entitled
   `AirPlayUIAgent`; that is how an unentitled app can select HomePods.
 
 The protocol header lives in `Sources/CacophonyProtocol/include/CacophonyProtocol.h`.
 
+## Troubleshooting
+
+- **Cacophony quits immediately** – move `Cacophony.app` to `/Applications` and launch it again.
+- **Driver installation fails** – approve Cacophony in **System Settings → General → Login Items & Extensions**, then retry from the right-click menu.
+- **No speakers are listed** – open the audio panel, click the AirPlay picker, and check that the speakers are on the same network.
+- **The speaker picker keeps spinning** – close and reopen the picker. Cacophony resets stale picker state automatically.
+- **No audio** – make sure Cacophony is selected as the system output and at least one speaker is selected.
+
 ## Limitations
 
-- Uses private API (`AVOutputContext`, route-picker SPI) and can break on macOS updates.
-- Speaker selections cannot be restored programmatically. After restarting
-  Cacophony, choose speakers again. Keeping Cacophony running avoids this.
-- AirPlay buffers about two seconds. Music is fine; video and games will be out
-  of sync.
-- If Cacophony is the system output and the helper is not running, audio is
-  silent. Launch at Login is enabled by default; quit from the menu so the
-  previous output is restored.
-- The driver installs into `/Library/Audio/Plug-Ins/HAL` and requires admin
-  rights. Installing or updating it restarts Core Audio.
+- Uses private `AVOutputContext` APIs and route-picker SPI; may break on future macOS releases.
+- AirPlay adds roughly two seconds of buffering, so it is not suitable for video or gaming.
+- Speaker selections cannot be restored programmatically; choose speakers again after restarting Cacophony. Keeping Cacophony running avoids this.
+- If Cacophony is the system output and the app is not running, audio is silent. Launch at Login is enabled by default; quit from the menu so the previous output is restored.
+- The driver installs into `/Library/Audio/Plug-Ins/HAL` and requires administrator approval. Installing or updating it restarts Core Audio.
 
 ## Credits
 
 Cacophony is based on [Airlift](https://github.com/jgarms/airlift) (MIT) for the
 AirPlay 2 routing and speaker picker, and uses
 [libASPL](https://github.com/gavv/libASPL) (MIT) for the HAL driver. See
-[THIRD_PARTY_NOTICES.md](https://github.com/stonerl/cacophony/blob/main/THIRD_PARTY_NOTICES.md).
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 AirPlay, HomePod, and macOS are trademarks of Apple Inc.
+
+## License
+
+Cacophony is released under the MIT License. See [LICENSE](LICENSE).
