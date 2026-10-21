@@ -105,9 +105,11 @@ final class SystemAudioController: @unchecked Sendable {
         alog("Cacophony receiver listening on udp 127.0.0.1:\(CACOPHONY_UDP_PORT)")
 
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             self?.tick()
         }
+        timer.tolerance = 0.25
+        self.timer = timer
         tick()
         onChange?()
     }

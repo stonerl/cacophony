@@ -68,21 +68,30 @@ final class PanelView: NSObject {
     }
 
     func updateCaption(hasSpeakers: Bool, isDefault: Bool) {
+        let title: String
         if !hasSpeakers {
-            captionButton.title = PanelView.chooseSpeakersTitle
+            title = PanelView.chooseSpeakersTitle
         } else if isDefault {
-            captionButton.title = "Cacophony is the system output."
+            title = "Cacophony is the system output."
         } else {
-            captionButton.title = "Cacophony is not the system output."
+            title = "Cacophony is not the system output."
+        }
+        if captionButton.title != title {
+            captionButton.title = title
         }
     }
 
     func updateDriverTitle(_ title: String) {
-        driverButton.title = title
+        if driverButton.title != title {
+            driverButton.title = title
+        }
     }
 
     func updateLoginState(_ enabled: Bool) {
-        loginCheckbox.state = enabled ? .on : .off
+        let state: NSControl.StateValue = enabled ? .on : .off
+        if loginCheckbox.state != state {
+            loginCheckbox.state = state
+        }
     }
 
     @discardableResult

@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
     private var lastPickerDismissedAt: TimeInterval = -Double.infinity
     private var lastHasSpeakers: Bool?
     private var lastAutoSwitchFailure: TimeInterval = -Double.infinity
+    private var lastNeedsAttention: Bool?
+    private var lastStatusIconSide: CGFloat?
+    private var lastAppearsDisabled: Bool?
     private var controller: SystemAudioController!
     private var refreshTimer: Timer?
 
@@ -76,11 +79,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
         panelView.onDriverAction = { [weak self] in self?.driverAction() }
         panelView.onQuit = { [weak self] in self?.quitApp() }
 
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.reconcile()
+                self?.refreshUI()
             }
         }
+        timer.tolerance = 0.5
+        refreshTimer = timer
 
         // React immediately when the picker changes our route.
         NotificationCenter.default.addObserver(
@@ -155,7 +160,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
 
         // Full-strength icon while streaming, dimmed while idle.
         updateStatusIcon(needsAttention: needsAttention)
-        statusItem.button?.appearsDisabled = !controller.isStreaming && !needsAttention
+        let appearsDisabled = !controller.isStreaming && !needsAttention
+        if lastAppearsDisabled != appearsDisabled {
+            lastAppearsDisabled = appearsDisabled
+            statusItem.button?.appearsDisabled = appearsDisabled
+        }
 
         refreshSpeakerPanel(devices: devices, force: false)
     }
@@ -163,6 +172,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
     private func updateStatusIcon(needsAttention: Bool) {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let side: CGFloat = (screen?.safeAreaInsets.top ?? 0) > 0 ? 16 : 14
+
+        guard lastNeedsAttention != needsAttention || lastStatusIconSide != side else { return }
+        lastNeedsAttention = needsAttention
+        lastStatusIconSide = side
 
         let configuration = NSImage.SymbolConfiguration(pointSize: side, weight: .regular)
         let base = (needsAttention ? attentionIcon : streamingIcon) ?? streamingIcon

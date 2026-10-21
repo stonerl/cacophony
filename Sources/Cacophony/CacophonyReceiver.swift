@@ -46,7 +46,7 @@ final class CacophonyUDPReceiver: @unchecked Sendable {
         var receiveBuffer: Int32 = 1 << 20
         setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &receiveBuffer, socklen_t(MemoryLayout<Int32>.size))
 
-        var timeout = timeval(tv_sec: 0, tv_usec: 200_000)
+        var timeout = timeval(tv_sec: 1, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
 
         var address = sockaddr_in()
