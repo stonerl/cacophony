@@ -24,6 +24,7 @@ endif()
 
 find_program(SWIFT_EXECUTABLE swift REQUIRED)
 find_program(CODESIGN_EXECUTABLE codesign REQUIRED)
+find_program(ACTOOL_EXECUTABLE actool REQUIRED)
 
 execute_process(
     COMMAND "${SWIFT_EXECUTABLE}" build
@@ -63,6 +64,9 @@ add_custom_target(app
         "${CMAKE_SOURCE_DIR}/Resources/Cacophony.icns"
         "${CACOPHONY_APP}/Contents/Resources/Cacophony.icns"
     COMMAND "${CMAKE_COMMAND}" -E copy
+        "${CMAKE_SOURCE_DIR}/Resources/Assets.car"
+        "${CACOPHONY_APP}/Contents/Resources/Assets.car"
+    COMMAND "${CMAKE_COMMAND}" -E copy
         "${CMAKE_BINARY_DIR}/generated/Info.plist"
         "${CACOPHONY_APP}/Contents/Info.plist"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
@@ -72,7 +76,7 @@ add_custom_target(app
         "${CACOPHONY_APP}/Contents/Resources/CacophonyDriver.driver"
     COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
         "${CACOPHONY_APP}"
-    DEPENDS CacophonyDriver
+    DEPENDS CacophonyDriver icon
     COMMENT "Building Cacophony.app"
     VERBATIM
     USES_TERMINAL
@@ -93,15 +97,41 @@ add_custom_target(uninstall-driver
 )
 
 add_custom_target(icon
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf
+        "${CMAKE_BINARY_DIR}/Cacophony.iconset"
+        "${CMAKE_BINARY_DIR}/Cacophony.icon"
+        "${CMAKE_BINARY_DIR}/icon-assets"
     COMMAND "${CMAKE_COMMAND}" -E make_directory
         "${CMAKE_BINARY_DIR}/Cacophony.iconset"
+        "${CMAKE_BINARY_DIR}/Cacophony.icon"
+        "${CMAKE_BINARY_DIR}/icon-assets"
     COMMAND "${SWIFT_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/Scripts/make-icon.swift"
         "${CMAKE_BINARY_DIR}/Cacophony.iconset"
+        "${CMAKE_BINARY_DIR}/Cacophony.icon"
     COMMAND /usr/bin/iconutil -c icns
         "${CMAKE_BINARY_DIR}/Cacophony.iconset"
         -o "${CMAKE_SOURCE_DIR}/Resources/Cacophony.icns"
-    COMMENT "Generating Resources/Cacophony.icns"
+    COMMAND "${ACTOOL_EXECUTABLE}"
+        "${CMAKE_BINARY_DIR}/Cacophony.icon"
+        --compile "${CMAKE_BINARY_DIR}/icon-assets"
+        --output-format human-readable-text
+        --notices
+        --warnings
+        --errors
+        --output-partial-info-plist
+        "${CMAKE_BINARY_DIR}/icon-assets/assetcatalog_generated_info.plist"
+        --app-icon Cacophony
+        --include-all-app-icons
+        --enable-on-demand-resources NO
+        --development-region en
+        --target-device mac
+        --minimum-deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+        --platform macosx
+    COMMAND "${CMAKE_COMMAND}" -E copy
+        "${CMAKE_BINARY_DIR}/icon-assets/Assets.car"
+        "${CMAKE_SOURCE_DIR}/Resources/Assets.car"
+    COMMENT "Generating Resources/Cacophony.icns and Resources/Assets.car"
     VERBATIM
     USES_TERMINAL
 )
