@@ -23,7 +23,15 @@ set(DRIVER_ENTRYPOINT "CacophonyDriverEntryPoint")
 
 set(LIBASPL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../Vendor/libASPL" CACHE PATH "libASPL source directory")
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+if(POLICY CMP0175)
+    # libASPL's generator commands omit POST_BUILD; preserve the old behavior
+    # while configuring the vendored submodule.
+    set(CMAKE_POLICY_DEFAULT_CMP0175 OLD)
+endif()
 add_subdirectory("${LIBASPL_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/libASPL")
+if(POLICY CMP0175)
+    unset(CMAKE_POLICY_DEFAULT_CMP0175)
+endif()
 
 add_library(${DRIVER_NAME} MODULE
   "CacophonyDriver.cpp"
