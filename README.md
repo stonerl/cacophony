@@ -43,6 +43,7 @@ make configure
 make app
 make notarize
 make run
+make distclean
 ```
 
 For local signing settings, create an ignored `Makefile.local`:
