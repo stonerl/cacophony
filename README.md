@@ -24,6 +24,8 @@ cmake --build build --target app
 open build/Cacophony.app
 ```
 
+The app and driver version come from the root `VERSION` file.
+
 The `app` target builds the Swift app, builds and signs the driver, assembles
 `Cacophony.app`, embeds the driver, and signs the app. To use a Developer ID
 certificate, configure with:
@@ -80,7 +82,7 @@ cmake --build build --target notarize
 
 The `notarize` target re-signs the embedded driver and app with a secure
 timestamp and hardened runtime, submits a zip, staples the ticket, and writes
-`build/Cacophony-0.1.0.zip`. Credentials stay in the keychain, not in the
+`build/Cacophony-<version>.zip`. Credentials stay in the keychain, not in the
 repository.
 
 ## Install the driver
