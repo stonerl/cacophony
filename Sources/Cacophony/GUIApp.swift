@@ -18,8 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
     private var lastNeedsAttention: Bool?
     private var lastStatusIconSide: CGFloat?
     private var lastAppearsDisabled: Bool?
+    private var routeChangeObserver: NSObjectProtocol?
+    private var isRecoveringAirPlay = false
     private var controller: SystemAudioController!
-    private var refreshTimer: Timer?
 
     private var panel: StatusPanel? { panelView?.panel }
 
@@ -52,13 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
         }
         if let id = CACContextID(context) { defaults.set(id, forKey: "contextID") }
         alog("context \(context) id=\(CACContextID(context) ?? "nil")")
-        controller = SystemAudioController(context: context)
-        controller.onChange = { [weak self] in
-            Task { @MainActor [weak self] in self?.refreshUI() }
-        }
-        controller.onNeedsSpeakers = { [weak self] in
-            Task { @MainActor [weak self] in self?.showPanel() }
-        }
+        controller = makeController(context: context)
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.toolTip = "Cacophony"
@@ -85,16 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
             }
         }
         timer.tolerance = 0.5
-        refreshTimer = timer
 
-        // React immediately when the picker changes our route.
-        NotificationCenter.default.addObserver(
-            forName: .init("AVOutputContextOutputDevicesDidChangeNotification"), object: context, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.reconcile()
-            }
-        }
+        observeRouteChanges(for: context)
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
@@ -130,6 +117,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
                 self?.promptForDriverInstall()
             }
         }
+    }
+
+    private func makeController(context: NSObject) -> SystemAudioController {
+        let controller = SystemAudioController(context: context)
+        controller.onChange = { [weak self] in
+            Task { @MainActor [weak self] in self?.refreshUI() }
+        }
+        controller.onNeedsSpeakers = { [weak self] in
+            Task { @MainActor [weak self] in self?.showPanel() }
+        }
+        controller.onConnectionFailure = { [weak self] reason in
+            Task { @MainActor [weak self] in self?.recoverAirPlay(reason: reason) }
+        }
+        return controller
+    }
+
+    private func observeRouteChanges(for context: NSObject) {
+        if let routeChangeObserver {
+            NotificationCenter.default.removeObserver(routeChangeObserver)
+        }
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: .init("AVOutputContextOutputDevicesDidChangeNotification"),
+            object: context,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if !self.pickerIsPresentingRoutes {
+                    self.panelView.resetPicker()
+                }
+                self.reconcile()
+            }
+        }
+    }
+
+    private func recoverAirPlay(reason: String) {
+        guard !isRecoveringAirPlay else { return }
+        isRecoveringAirPlay = true
+        defer { isRecoveringAirPlay = false }
+
+        alog("resetting AirPlay context after: \(reason)")
+        hidePanel()
+
+        controller.stop()
+
+        guard let context = CACCreateAudioContext() ?? CACDefaultSharedAudioContext() else {
+            alog("could not create replacement audio context")
+            return
+        }
+
+        let contextID = CACContextID(context)
+        let defaults = UserDefaults.standard
+        if let contextID {
+            defaults.set(contextID, forKey: "contextID")
+        } else {
+            defaults.removeObject(forKey: "contextID")
+        }
+
+        if let contextID {
+            panelView.updateOutputContextID(contextID)
+        }
+
+        controller = makeController(context: context)
+        observeRouteChanges(for: context)
+        lastHasSpeakers = nil
+        lastAutoSwitchFailure = -Double.infinity
+        controller.start()
+        refreshUI()
     }
 
     private func reconcile() {
@@ -312,6 +367,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
 
     private func showPanel() {
         guard let button = statusItem.button, let panel else { return }
+        if !panel.isVisible {
+            panelView.resetPicker()
+        }
         refreshSpeakerPanel(devices: CACContextOutputDevices(controller.context), force: true)
         guard !panel.isVisible else { return }
 
@@ -429,7 +487,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
         pickerIsPresentingRoutes = false
         lastPickerDismissedAt = ProcessInfo.processInfo.systemUptime
         alog("speaker list dismissed")
-        refreshSpeakerPanel(devices: CACContextOutputDevices(controller.context), force: true)
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            self.panelView.resetPicker()
+            self.refreshSpeakerPanel(
+                devices: CACContextOutputDevices(self.controller.context),
+                force: true
+            )
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

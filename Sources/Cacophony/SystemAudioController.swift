@@ -22,10 +22,11 @@ final class SystemAudioController: @unchecked Sendable {
     private var receiverRunning = false
     private var lastStatsLog: TimeInterval = 0
     private var expectedSampleTime: UInt64?
-    private var outputStartedAt: TimeInterval?
     private var retryNotBefore: TimeInterval = 0
     private var previousHasSpeakers = false
     private let connectionTimeout: TimeInterval = 10
+    private var lastEnqueuedFrames: Int64 = 0
+    private var lastEnqueuedProgressAt: TimeInterval = 0
     private var latePacketDrops = 0
 
     private static let hostTimeScale: Double = {
@@ -43,6 +44,10 @@ final class SystemAudioController: @unchecked Sendable {
     /// Called on the main thread when system audio is playing but no AirPlay
     /// speakers are selected.
     var onNeedsSpeakers: (() -> Void)?
+
+    /// Called on the main thread when an active AirPlay route stops making
+    /// progress and the output context needs to be replaced.
+    var onConnectionFailure: ((String) -> Void)?
 
     init(context: NSObject) {
         self.context = context
@@ -212,8 +217,17 @@ final class SystemAudioController: @unchecked Sendable {
             lastError = CACRendererErrorMessage(output.renderer) ?? "renderer failed"
             alog("AirPlay renderer failed: \(lastError ?? "?")")
             stopOutput(reason: "renderer failed")
+            onConnectionFailure?(lastError ?? "AirPlay renderer failed")
             onChange?()
             return
+        }
+
+        if let output {
+            let frames = output.enqueuedFrames
+            if frames > lastEnqueuedFrames {
+                lastEnqueuedFrames = frames
+                lastEnqueuedProgressAt = now
+            }
         }
 
         // No packets for a while: release the AirPlay session.
@@ -244,18 +258,15 @@ final class SystemAudioController: @unchecked Sendable {
             return
         }
 
-        if let output, let startedAt = outputStartedAt,
+        if output != nil,
            audibleAge < 2,
-           now - startedAt >= connectionTimeout,
-           output.enqueuedFrames == 0 {
+           now - lastEnqueuedProgressAt >= connectionTimeout {
             let names = routedDeviceNames.joined(separator: " + ")
-            alog("AirPlay connection timeout after \(Int(connectionTimeout))s: \(names)")
+            alog("AirPlay connection stalled after \(Int(connectionTimeout))s: \(names)")
             lastError = "Could not connect to AirPlay speaker"
-            stopOutput(reason: "connection timeout")
-            let cleared = CACContextSetOutputDevices(context, [] as [NSObject])
-            alog("cleared stuck AirPlay route=\(cleared)")
-            if cleared { previousHasSpeakers = false }
+            stopOutput(reason: "connection stalled")
             retryNotBefore = now + connectionTimeout
+            onConnectionFailure?(lastError ?? "Could not connect to AirPlay speaker")
             onChange?()
             return
         }
@@ -274,7 +285,7 @@ final class SystemAudioController: @unchecked Sendable {
         if let output, now - lastStatsLog >= 10 {
             lastStatsLog = now
             let snapshot = receiveStats.snapshot()
-            alog("stats packets=\(snapshot.packets) frames=\(snapshot.frames) gaps=\(snapshot.gaps) peak=\(String(format: "%.3f", snapshot.peak)) ringEmpty=\(output.ringEmptyTicks.load(ordering: .relaxed))")
+            alog("stats packets=\(snapshot.packets) frames=\(snapshot.frames) gaps=\(snapshot.gaps) peak=\(String(format: "%.3f", snapshot.peak)) ringEmpty=\(output.ringEmptyTicks.load(ordering: .relaxed)) enqueued=\(output.enqueuedFrames)")
         }
     }
 
@@ -292,7 +303,8 @@ final class SystemAudioController: @unchecked Sendable {
                 lastError = "renderer setOutputContext: unavailable"
             }
             self.output = output
-            outputStartedAt = ProcessInfo.processInfo.systemUptime
+            lastEnqueuedFrames = 0
+            lastEnqueuedProgressAt = ProcessInfo.processInfo.systemUptime
             alog("Cacophony streaming to \(routedDeviceNames.joined(separator: " + "))")
         } catch {
             lastError = "\(error)"
@@ -301,7 +313,6 @@ final class SystemAudioController: @unchecked Sendable {
     }
 
     private func stopOutput(reason: String) {
-        outputStartedAt = nil
         stateLock.lock()
         expectedSampleTime = nil
         stateLock.unlock()

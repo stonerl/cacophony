@@ -27,9 +27,6 @@ NSObject *_Nullable CACContextForID(NSString *contextID);
 /// picker (which runs in the entitled AirPlayUIAgent) to our context.
 BOOL CACPickerSetOutputContextID(NSObject *pickerView, NSString *contextID);
 
-/// -[AVOutputContext setOutputDevices:]. Returns NO if the selector is missing.
-BOOL CACContextSetOutputDevices(NSObject *context, NSArray<NSObject *> *devices);
-
 /// -[AVOutputContext outputDevices] (falls back to outputDevice, wrapped in an array).
 NSArray<NSObject *> *CACContextOutputDevices(NSObject *context);
 

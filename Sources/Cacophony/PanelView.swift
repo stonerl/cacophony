@@ -27,13 +27,16 @@ final class PanelView: NSObject {
     private static let chooseSpeakersTitle = "Choose one or more speakers."
 
     let panel: StatusPanel
-    private let picker: AVRoutePickerView
+    private var picker: AVRoutePickerView
     private let captionButton: PointerButton
     private let loginCheckbox: NSButton
     private let driverButton: NSButton
 
+    private let pickerRow = NSStackView()
     private let rows = NSStackView()
     private let stack = NSStackView()
+    private weak var pickerDelegate: AVRoutePickerViewDelegate?
+    private var outputContextID: String?
     private var speakerControls: [SpeakerVolumeControl] = []
     private var lastSpeakerNames: [String] = []
 
@@ -92,6 +95,23 @@ final class PanelView: NSObject {
         if loginCheckbox.state != state {
             loginCheckbox.state = state
         }
+    }
+
+    func updateOutputContextID(_ contextID: String) {
+        outputContextID = contextID
+        resetPicker()
+    }
+
+    func resetPicker() {
+        guard let outputContextID else { return }
+
+        pickerRow.removeArrangedSubview(picker)
+        picker.removeFromSuperview()
+        let newPicker = AVRoutePickerView(frame: .zero)
+        picker = newPicker
+        configurePicker(contextID: outputContextID, delegate: pickerDelegate)
+        pickerRow.insertArrangedSubview(newPicker, at: 0)
+        alog("picker reset on context \(outputContextID)")
     }
 
     @discardableResult
@@ -255,10 +275,12 @@ final class PanelView: NSObject {
         panel.isMovableByWindowBackground = false
     }
 
-    private func configurePicker(contextID: String?, delegate: AVRoutePickerViewDelegate) {
+    private func configurePicker(contextID: String?, delegate: AVRoutePickerViewDelegate?) {
         picker.translatesAutoresizingMaskIntoConstraints = false
         picker.isRoutePickerButtonBordered = false
         picker.delegate = delegate
+        pickerDelegate = delegate
+        outputContextID = contextID
         picker.widthAnchor.constraint(equalToConstant: 24).isActive = true
         picker.heightAnchor.constraint(equalToConstant: 24).isActive = true
         if let contextID {
@@ -310,7 +332,8 @@ final class PanelView: NSObject {
         content.autoresizingMask = [.width, .height]
         glass.contentView = content
 
-        let pickerRow = NSStackView(views: [picker, captionButton])
+        pickerRow.addArrangedSubview(picker)
+        pickerRow.addArrangedSubview(captionButton)
         pickerRow.orientation = .horizontal
         pickerRow.spacing = 10
         pickerRow.alignment = .centerY

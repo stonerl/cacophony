@@ -54,14 +54,6 @@ BOOL CACPickerSetOutputContextID(NSObject *pickerView, NSString *contextID) {
     return YES;
 }
 
-BOOL CACContextSetOutputDevices(NSObject *context, NSArray<NSObject *> *devices) {
-    SEL sel = NSSelectorFromString(@"setOutputDevices:");
-    if (![context respondsToSelector:sel]) return NO;
-    void (*fn)(id, SEL, NSArray *) = (void (*)(id, SEL, NSArray *))objc_msgSend;
-    fn(context, sel, devices);
-    return YES;
-}
-
 NSArray<NSObject *> *CACContextOutputDevices(NSObject *context) {
     @try {
         NSArray *devices = [context valueForKey:@"outputDevices"];
