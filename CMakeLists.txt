@@ -11,6 +11,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CACOPHONY_VERSION "0.1.0" CACHE STRING "Cacophony version")
 set(CACOPHONY_BUNDLE_ID "com.stonerl.Cacophony" CACHE STRING "Application bundle identifier")
 set(CODESIGN_ID "-" CACHE STRING "codesign identity, or - for ad-hoc signing")
+set(NOTARY_PROFILE "" CACHE STRING "notarytool keychain profile; enables the notarize target")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -25,6 +26,8 @@ endif()
 find_program(SWIFT_EXECUTABLE swift REQUIRED)
 find_program(CODESIGN_EXECUTABLE codesign REQUIRED)
 find_program(ACTOOL_EXECUTABLE actool REQUIRED)
+find_program(XCRUN_EXECUTABLE xcrun REQUIRED)
+find_program(DITTO_EXECUTABLE ditto REQUIRED)
 
 execute_process(
     COMMAND "${SWIFT_EXECUTABLE}" build
@@ -81,6 +84,41 @@ add_custom_target(app
     VERBATIM
     USES_TERMINAL
 )
+
+if(NOTARY_PROFILE)
+    if(CODESIGN_ID STREQUAL "-")
+        message(FATAL_ERROR "NOTARY_PROFILE requires a Developer ID CODESIGN_ID")
+    endif()
+
+    add_custom_target(notarize
+        COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
+            --timestamp --options runtime
+            "${CACOPHONY_APP}/Contents/Resources/CacophonyDriver.driver"
+        COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
+            --timestamp --options runtime
+            "${CACOPHONY_APP}"
+        COMMAND "${CMAKE_COMMAND}" -E rm -f
+            "${CMAKE_BINARY_DIR}/Cacophony.zip"
+            "${CMAKE_BINARY_DIR}/Cacophony-${CACOPHONY_VERSION}.zip"
+        COMMAND "${DITTO_EXECUTABLE}" -c -k --keepParent
+            "${CACOPHONY_APP}"
+            "${CMAKE_BINARY_DIR}/Cacophony.zip"
+        COMMAND "${XCRUN_EXECUTABLE}" notarytool submit
+            "${CMAKE_BINARY_DIR}/Cacophony.zip"
+            --keychain-profile "${NOTARY_PROFILE}" --wait
+        COMMAND "${XCRUN_EXECUTABLE}" stapler staple "${CACOPHONY_APP}"
+        COMMAND "${XCRUN_EXECUTABLE}" stapler validate "${CACOPHONY_APP}"
+        COMMAND "${DITTO_EXECUTABLE}" -c -k --keepParent
+            "${CACOPHONY_APP}"
+            "${CMAKE_BINARY_DIR}/Cacophony-${CACOPHONY_VERSION}.zip"
+        DEPENDS app
+        COMMENT "Signing, notarizing, and stapling Cacophony.app"
+        VERBATIM
+        USES_TERMINAL
+    )
+else()
+    message(STATUS "Notarize target disabled; set -DNOTARY_PROFILE=<profile> to enable it")
+endif()
 
 add_custom_target(install-driver
     COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --component driver

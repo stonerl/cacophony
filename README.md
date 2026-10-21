@@ -34,6 +34,33 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build --target app
 ```
 
+## Notarized build
+
+Notarization requires a Developer ID Application certificate and a
+`notarytool` keychain profile. Create the profile once with an app-specific
+password from appleid.apple.com:
+
+```sh
+xcrun notarytool store-credentials cacophony-notary \
+  --apple-id "you@example.com" \
+  --team-id "TEAMID" \
+  --password "app-specific-password"
+```
+
+Then configure and build:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCODESIGN_ID="Developer ID Application: Your Name (TEAMID)" \
+  -DNOTARY_PROFILE=cacophony-notary
+cmake --build build --target notarize
+```
+
+The `notarize` target re-signs the embedded driver and app with a secure
+timestamp and hardened runtime, submits a zip, staples the ticket, and writes
+`build/Cacophony-0.1.0.zip`. Credentials stay in the keychain, not in the
+repository.
+
 ## Install the driver
 
 From the menu bar panel: **Install Driver…** and approve the admin prompt.
