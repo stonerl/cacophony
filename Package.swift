@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "cacophony",
-    platforms: [.macOS("27.0")],
+    platforms: [.macOS("26.0")],
     targets: [
         .target(
             name: "CacophonyRouting",

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-set(CMAKE_OSX_DEPLOYMENT_TARGET "27.0" CACHE STRING "Minimum macOS version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum macOS version")
 
 project(Cacophony LANGUAGES CXX)
 

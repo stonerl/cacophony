@@ -294,7 +294,6 @@ final class PanelView: NSObject {
         let glass = NSGlassEffectView(frame: container.bounds)
         glass.style = .regular
         glass.cornerRadius = PanelMetrics.cornerRadius
-        glass.effectIsInteractive = false
         glass.autoresizingMask = [.width, .height]
         container.addSubview(glass)
 

@@ -10,7 +10,7 @@ multi-room part.
 
 ## Requirements
 
-- macOS 27
+- macOS 26
 - Xcode 27 / Swift 6
 - CMake 3.28 or newer
 - Admin rights to install the HAL driver
