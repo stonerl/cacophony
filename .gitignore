@@ -1,5 +1,7 @@
 .build/
 build/
+Makefile.local
+Resources/Assets.car
 .DS_Store
 *.xcodeproj
 .swiftpm/

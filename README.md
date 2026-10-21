@@ -34,6 +34,24 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build --target app
 ```
 
+## Make targets
+
+A thin `Makefile` wraps the CMake targets for editors that discover Makefiles:
+
+```sh
+make configure
+make app
+make notarize
+make run
+```
+
+For local signing settings, create an ignored `Makefile.local`:
+
+```make
+CODESIGN_ID = Developer ID Application: Your Name (TEAMID)
+NOTARY_PROFILE = cacophony-notary
+```
+
 ## Notarized build
 
 Notarization requires a Developer ID Application certificate and a
