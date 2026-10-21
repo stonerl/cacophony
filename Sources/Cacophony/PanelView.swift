@@ -29,8 +29,6 @@ final class PanelView: NSObject {
     let panel: StatusPanel
     private var picker: AVRoutePickerView
     private let captionButton: PointerButton
-    private let loginCheckbox: NSButton
-    private let driverButton: NSButton
 
     private let pickerRow = NSStackView()
     private let rows = NSStackView()
@@ -41,9 +39,6 @@ final class PanelView: NSObject {
     private var lastSpeakerNames: [String] = []
 
     var canOpenPicker: (() -> Bool)?
-    var onToggleLaunchAtLogin: (() -> Void)?
-    var onDriverAction: (() -> Void)?
-    var onQuit: (() -> Void)?
 
     init(pickerDelegate: AVRoutePickerViewDelegate, contextID: String?) {
         panel = StatusPanel(
@@ -57,12 +52,6 @@ final class PanelView: NSObject {
         )
         picker = AVRoutePickerView(frame: .zero)
         captionButton = PointerButton(title: PanelView.chooseSpeakersTitle, target: nil, action: nil)
-        loginCheckbox = NSButton(
-            checkboxWithTitle: "Launch at Login",
-            target: nil,
-            action: nil
-        )
-        driverButton = NSButton(title: "Install Driver…", target: nil, action: nil)
         super.init()
 
         configurePanel()
@@ -81,19 +70,6 @@ final class PanelView: NSObject {
         }
         if captionButton.title != title {
             captionButton.title = title
-        }
-    }
-
-    func updateDriverTitle(_ title: String) {
-        if driverButton.title != title {
-            driverButton.title = title
-        }
-    }
-
-    func updateLoginState(_ enabled: Bool) {
-        let state: NSControl.StateValue = enabled ? .on : .off
-        if loginCheckbox.state != state {
-            loginCheckbox.state = state
         }
     }
 
@@ -302,14 +278,6 @@ final class PanelView: NSObject {
             guard let self else { return false }
             return !(self.canOpenPicker?() ?? true)
         }
-
-        loginCheckbox.target = self
-        loginCheckbox.action = #selector(toggleLaunchAtLogin)
-
-        driverButton.target = self
-        driverButton.action = #selector(runDriverAction)
-        driverButton.bezelStyle = .glass
-        driverButton.controlSize = .small
     }
 
     private func buildLayout() {
@@ -339,38 +307,18 @@ final class PanelView: NSObject {
         pickerRow.alignment = .centerY
         pickerRow.translatesAutoresizingMaskIntoConstraints = false
 
-        let separator1 = NSBox()
-        separator1.boxType = .separator
-        separator1.translatesAutoresizingMaskIntoConstraints = false
-
-        let separator2 = NSBox()
-        separator2.boxType = .separator
-        separator2.translatesAutoresizingMaskIntoConstraints = false
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
 
         rows.orientation = .vertical
         rows.alignment = .leading
         rows.spacing = 6
         rows.translatesAutoresizingMaskIntoConstraints = false
 
-        let quitButton = NSButton(title: "Quit Cacophony", target: nil, action: nil)
-        quitButton.target = self
-        quitButton.action = #selector(quitApp)
-        quitButton.bezelStyle = .glass
-        quitButton.controlSize = .small
-
-        let bottomSpacer = NSView()
-        bottomSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let bottomRow = NSStackView(views: [driverButton, bottomSpacer, quitButton])
-        bottomRow.orientation = .horizontal
-        bottomRow.spacing = 8
-        bottomRow.translatesAutoresizingMaskIntoConstraints = false
-
         stack.addArrangedSubview(pickerRow)
-        stack.addArrangedSubview(separator1)
+        stack.addArrangedSubview(separator)
         stack.addArrangedSubview(rows)
-        stack.addArrangedSubview(separator2)
-        stack.addArrangedSubview(loginCheckbox)
-        stack.addArrangedSubview(bottomRow)
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
@@ -384,10 +332,8 @@ final class PanelView: NSObject {
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -padding),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -padding),
             pickerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            separator1.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            separator2.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            separator.widthAnchor.constraint(equalTo: stack.widthAnchor),
             rows.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            bottomRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
 
@@ -404,15 +350,4 @@ final class PanelView: NSObject {
         }
     }
 
-    @objc private func toggleLaunchAtLogin() {
-        onToggleLaunchAtLogin?()
-    }
-
-    @objc private func runDriverAction() {
-        onDriverAction?()
-    }
-
-    @objc private func quitApp() {
-        onQuit?()
-    }
 }

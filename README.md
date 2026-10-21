@@ -63,10 +63,11 @@ repository.
 
 ## Install the driver
 
-From the menu bar panel: **Install Driver…**. Cacophony registers a background
-helper; if macOS asks, approve Cacophony in System Settings > General > Login
-Items & Extensions. Core Audio restarts, so audio stops briefly. Cacophony
-detects the device automatically; no app restart is needed.
+Right-click or Control-click the Cacophony menu bar icon and choose
+**Install Driver…**. Cacophony registers a background helper; if macOS asks,
+approve Cacophony in System Settings > General > Login Items & Extensions. Core
+Audio restarts, so audio stops briefly. Cacophony detects the device
+automatically; no app restart is needed.
 
 The SMAppService helper is most reliable when `Cacophony.app` is in
 `/Applications`. Apps containing LaunchDaemons must be notarized, so build the
@@ -85,8 +86,10 @@ notarized package before testing the in-app installer.
 4. Play audio. The panel shows the selected speakers and per-speaker volume.
 
 Quitting Cacophony restores the previous system output when Cacophony is current.
-Enable **Launch at Login** so Cacophony is running whenever Cacophony is selected
-as the output.
+Cacophony enables **Launch at Login** on first launch; right-click or
+Control-click the menu bar icon to change it.
+
+The menu also contains the driver actions and **Quit Cacophony**.
 
 ## Architecture
 
@@ -122,8 +125,8 @@ The protocol header lives in `Sources/CacophonyProtocol/include/CacophonyProtoco
 - AirPlay buffers about two seconds. Music is fine; video and games will be out
   of sync.
 - If Cacophony is the system output and the helper is not running, audio is
-  silent. Use Launch at Login, and quit from the menu so the previous output is
-  restored.
+  silent. Launch at Login is enabled by default; quit from the menu so the
+  previous output is restored.
 - The driver installs into `/Library/Audio/Plug-Ins/HAL` and requires admin
   rights. Installing or updating it restarts Core Audio.
 

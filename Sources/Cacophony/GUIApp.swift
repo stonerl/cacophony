@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
     private var isRecoveringAirPlay = false
     private var controller: SystemAudioController!
 
+    private static let launchAtLoginConfiguredKey = "launchAtLoginConfigured"
     private var panel: StatusPanel? { panelView?.panel }
 
     private let streamingIcon = NSImage(systemSymbolName: "airplayaudio", accessibilityDescription: "Cacophony")
@@ -61,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
 
         if let button = statusItem.button {
             button.target = self
-            button.action = #selector(togglePanel)
+            button.action = #selector(statusItemClicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
@@ -70,9 +71,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
             guard let self, !self.pickerIsPresentingRoutes else { return false }
             return ProcessInfo.processInfo.systemUptime - self.lastPickerDismissedAt > 0.2
         }
-        panelView.onToggleLaunchAtLogin = { [weak self] in self?.toggleLaunchAtLogin() }
-        panelView.onDriverAction = { [weak self] in self?.driverAction() }
-        panelView.onQuit = { [weak self] in self?.quitApp() }
 
         let timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -107,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
         // Streaming is the default; quitting Cacophony is how you opt out.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            self.enableLaunchAtLoginByDefaultIfNeeded()
             self.controller.start()
             self.refreshUI()
         }
@@ -203,14 +202,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
 
         let needsAttention = !installed || device == nil || controller.lastError != nil
 
-        if !installed {
-            panelView.updateDriverTitle("Install Driver…")
-        } else if DriverManager.isUpdateAvailable {
-            panelView.updateDriverTitle("Update Driver…")
-        } else {
-            panelView.updateDriverTitle("Uninstall Driver…")
-        }
-        panelView.updateLoginState(SMAppService.mainApp.status == .enabled)
         panelView.updateCaption(hasSpeakers: hasSpeakers, isDefault: isDefault)
 
         // Full-strength icon while streaming, dimmed while idle.
@@ -356,7 +347,86 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
         alert.runModal()
     }
 
-    @objc private func togglePanel() {
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        guard let event = NSApp.currentEvent else {
+            togglePanel()
+            return
+        }
+
+        let isSecondaryClick =
+            event.type == .rightMouseUp ||
+            event.type == .rightMouseDown ||
+            event.modifierFlags.contains(.control)
+        if isSecondaryClick {
+            showSettingsMenu()
+        } else {
+            togglePanel()
+        }
+    }
+
+    private func showSettingsMenu() {
+        hidePanel()
+
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        let loginItem = NSMenuItem(
+            title: "Launch at Login",
+            action: #selector(toggleLaunchAtLoginFromMenu(_:)),
+            keyEquivalent: ""
+        )
+        loginItem.target = self
+        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(loginItem)
+
+        menu.addItem(.separator())
+
+        let driverItem = NSMenuItem(
+            title: driverMenuTitle(),
+            action: #selector(driverActionFromMenu(_:)),
+            keyEquivalent: ""
+        )
+        driverItem.target = self
+        menu.addItem(driverItem)
+
+        menu.addItem(.separator())
+
+        let quitItem = NSMenuItem(
+            title: "Quit Cacophony",
+            action: #selector(quitFromMenu(_:)),
+            keyEquivalent: "q"
+        )
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    private func driverMenuTitle() -> String {
+        if !DriverManager.isInstalled {
+            return "Install Driver…"
+        }
+        if DriverManager.isUpdateAvailable {
+            return "Update Driver…"
+        }
+        return "Uninstall Driver…"
+    }
+
+    @objc private func toggleLaunchAtLoginFromMenu(_ sender: NSMenuItem) {
+        toggleLaunchAtLogin()
+    }
+
+    @objc private func driverActionFromMenu(_ sender: NSMenuItem) {
+        driverAction()
+    }
+
+    @objc private func quitFromMenu(_ sender: NSMenuItem) {
+        quitApp()
+    }
+
+    private func togglePanel() {
         alog("toggle panel visible=\(panel?.isVisible == true)")
         if panel?.isVisible == true {
             hidePanel()
@@ -464,7 +534,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
         NSApp.terminate(nil)
     }
 
+    private func enableLaunchAtLoginByDefaultIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: Self.launchAtLoginConfiguredKey) == nil else { return }
+
+        defaults.set(true, forKey: Self.launchAtLoginConfiguredKey)
+        guard SMAppService.mainApp.status == .notRegistered else {
+            alog("launch at login default: status \(SMAppService.mainApp.status.rawValue)")
+            return
+        }
+
+        do {
+            try SMAppService.mainApp.register()
+            alog("launch at login enabled by default")
+        } catch {
+            alog("launch at login default failed: \(error.localizedDescription)")
+        }
+    }
+
     private func toggleLaunchAtLogin() {
+        UserDefaults.standard.set(true, forKey: Self.launchAtLoginConfiguredKey)
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
