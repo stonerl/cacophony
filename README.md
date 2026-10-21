@@ -141,8 +141,7 @@ The protocol header lives in `Sources/CacophonyProtocol/include/CacophonyProtoco
 
 ## Limitations
 
-- Uses private API (`AVOutputContext`, route-picker SPI). It is for personal
-  use, not the App Store, and can break on macOS updates.
+- Uses private API (`AVOutputContext`, route-picker SPI) and can break on macOS updates.
 - Speaker selections cannot be restored programmatically. After restarting
   Cacophony, choose speakers again. Keeping Cacophony running avoids this.
 - AirPlay buffers about two seconds. Music is fine; video and games will be out
@@ -153,17 +152,11 @@ The protocol header lives in `Sources/CacophonyProtocol/include/CacophonyProtoco
 - The driver installs into `/Library/Audio/Plug-Ins/HAL` and requires admin
   rights. Installing or updating it restarts Core Audio.
 
-## Why not an AUv3 plug-in?
-
-This project started from an AUv3 skeleton, but AUv3 plug-ins run inside a host
-app and never become system output devices. A system output device must be a
-CoreAudio HAL driver. The AUv3 extension target is not used.
-
 ## Credits
 
 Cacophony is based on [Airlift](https://github.com/jgarms/airlift) (MIT) for the
 AirPlay 2 routing and speaker picker, and uses
 [libASPL](https://github.com/gavv/libASPL) (MIT) for the HAL driver. See
-`THIRD_PARTY_NOTICES.md`.
+[THIRD_PARTY_NOTICES.md](https://github.com/stonerl/cacophony/blob/main/THIRD_PARTY_NOTICES.md).
 
 AirPlay, HomePod, and macOS are trademarks of Apple Inc.
