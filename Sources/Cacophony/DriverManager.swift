@@ -1,32 +1,28 @@
+import CacophonyHelperProtocol
 import CoreAudio
 import Foundation
 
 enum DriverManagerError: LocalizedError {
     case driverDeviceMissing
     case bundledDriverMissing
-    case commandFailed(String)
 
     var errorDescription: String? {
         switch self {
-        case .driverDeviceMissing: return "The Cacophony audio device is not available. Reinstall the driver and restart coreaudiod."
+        case .driverDeviceMissing: return "The Cacophony audio device is not available. Reinstall the driver."
         case .bundledDriverMissing: return "The bundled Cacophony driver could not be found."
-        case .commandFailed(let message): return message
         }
     }
 }
 
 enum DriverManager {
     static let deviceUID = "CacophonyDevice"
-    static let driverName = "CacophonyDriver.driver"
     private static let halDirectoryURL = URL(
-        fileURLWithPath: "/Library/Audio/Plug-Ins/HAL",
+        fileURLWithPath: CacophonyHelperConstants.halDirectoryPath,
         isDirectory: true
     )
-    private static let restartCoreAudioCommand =
-        "launchctl kickstart -k system/com.apple.audio.coreaudiod || killall -9 coreaudiod || true"
 
     static var installedDriverURL: URL {
-        halDirectoryURL.appendingPathComponent(driverName)
+        halDirectoryURL.appendingPathComponent(CacophonyHelperConstants.driverName)
     }
 
     static var isInstalled: Bool {
@@ -109,56 +105,14 @@ enum DriverManager {
         UserDefaults.standard.removeObject(forKey: "previousOutputUID")
     }
 
-    static func install() throws {
-        guard let driver = bundledDriverURL else {
+    static func install() async throws {
+        guard bundledDriverURL != nil else {
             throw DriverManagerError.bundledDriverMissing
         }
-        let destination = shellQuote(installedDriverURL.path)
-        let halDirectory = shellQuote(halDirectoryURL.path)
-        let command = """
-        set -e
-        rm -rf \(destination)
-        cp -R \(shellQuote(driver.path)) \(halDirectory)/
-        chown -R root:wheel \(destination)
-        \(restartCoreAudioCommand)
-        """
-        try runAsAdministrator(command)
+        try await PrivilegedHelper.install()
     }
 
-    static func uninstall() throws {
-        let command = """
-        set -e
-        rm -rf \(shellQuote(installedDriverURL.path))
-        \(restartCoreAudioCommand)
-        """
-        try runAsAdministrator(command)
-    }
-
-    private static func runAsAdministrator(_ command: String) throws {
-        let escaped = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        let source = "do shell script \"\(escaped)\" with administrator privileges"
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", source]
-        let pipe = Pipe()
-        process.standardError = pipe
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            throw DriverManagerError.commandFailed(
-                message.flatMap { $0.isEmpty ? nil : $0 } ?? "Installer failed."
-            )
-        }
-    }
-
-    private static func shellQuote(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    static func uninstall() async throws {
+        try await PrivilegedHelper.uninstall()
     }
 }

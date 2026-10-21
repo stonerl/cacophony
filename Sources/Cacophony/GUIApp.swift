@@ -99,19 +99,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
             }
         }
 
-        var defaultOutput = propertyAddress(kAudioHardwarePropertyDefaultOutputDevice)
-        AudioObjectAddPropertyListenerBlock(.system, &defaultOutput, .main) { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                DriverManager.noteDefaultOutputChange()
-                self?.refreshUI()
+        // Core Audio can block while a HAL driver is loading. Keep that work
+        // off the main thread so the menu bar item appears promptly.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var defaultOutput = propertyAddress(kAudioHardwarePropertyDefaultOutputDevice)
+            AudioObjectAddPropertyListenerBlock(.system, &defaultOutput, .main) { [weak self] _, _ in
+                Task { @MainActor [weak self] in
+                    DriverManager.noteDefaultOutputChange()
+                    self?.refreshUI()
+                }
             }
+            DriverManager.noteDefaultOutputChange()
         }
 
-        DriverManager.noteDefaultOutputChange()
-
         // Streaming is the default; quitting Cacophony is how you opt out.
-        controller.start()
-        refreshUI()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.controller.start()
+            self.refreshUI()
+        }
 
         if !DriverManager.isInstalled {
             Task { @MainActor [weak self] in
@@ -213,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
     private func promptForDriverInstall() {
         let alert = NSAlert()
         alert.messageText = "Install the Cacophony audio driver?"
-        alert.informativeText = "Cacophony needs a CoreAudio driver to appear as a system output. Installation requires admin rights and restarts coreaudiod, so audio stops for a moment."
+        alert.informativeText = "Cacophony needs a CoreAudio driver to appear as a system output. Cacophony installs a background helper for this; approve it in System Settings if prompted. Core Audio restarts, so audio stops for a moment."
         alert.addButton(withTitle: "Install")
         alert.addButton(withTitle: "Later")
         if alert.runModal() == .alertFirstButtonReturn {
@@ -230,15 +236,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
     }
 
     private func installDriver() {
-        do {
-            try DriverManager.install()
-            let alert = NSAlert()
-            alert.messageText = "Cacophony driver installed"
-            alert.informativeText = "Cacophony will detect the device automatically. Select speakers when it appears."
-            alert.runModal()
-            waitForDriverDevice()
-        } catch {
-            showError(error)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await DriverManager.install()
+                let alert = NSAlert()
+                alert.messageText = "Cacophony driver installed"
+                alert.informativeText = "Cacophony will detect the device automatically. Select speakers when it appears."
+                alert.runModal()
+                waitForDriverDevice()
+            } catch {
+                showError(error)
+            }
         }
     }
 
@@ -260,11 +269,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency AVRout
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
-        do {
-            try DriverManager.uninstall()
-            reconcile()
-        } catch {
-            showError(error)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await DriverManager.uninstall()
+                reconcile()
+            } catch {
+                showError(error)
+            }
         }
     }
 

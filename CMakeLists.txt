@@ -60,9 +60,16 @@ add_custom_target(app
     COMMAND "${CMAKE_COMMAND}" -E make_directory
         "${CACOPHONY_APP}/Contents/MacOS"
         "${CACOPHONY_APP}/Contents/Resources"
+        "${CACOPHONY_APP}/Contents/Library/LaunchDaemons"
     COMMAND "${CMAKE_COMMAND}" -E copy
         "${CACOPHONY_SWIFT_BIN_DIR}/cacophony"
         "${CACOPHONY_APP}/Contents/MacOS/Cacophony"
+    COMMAND "${CMAKE_COMMAND}" -E copy
+        "${CACOPHONY_SWIFT_BIN_DIR}/CacophonyHelper"
+        "${CACOPHONY_APP}/Contents/MacOS/CacophonyHelper"
+    COMMAND "${CMAKE_COMMAND}" -E copy
+        "${CMAKE_SOURCE_DIR}/Helper/com.stonerl.Cacophony.Helper.plist"
+        "${CACOPHONY_APP}/Contents/Library/LaunchDaemons/com.stonerl.Cacophony.Helper.plist"
     COMMAND "${CMAKE_COMMAND}" -E copy
         "${CMAKE_SOURCE_DIR}/Resources/Cacophony.icns"
         "${CACOPHONY_APP}/Contents/Resources/Cacophony.icns"
@@ -78,6 +85,9 @@ add_custom_target(app
     COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
         "${CACOPHONY_APP}/Contents/Resources/CacophonyDriver.driver"
     COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
+        --identifier com.stonerl.Cacophony.Helper
+        "${CACOPHONY_APP}/Contents/MacOS/CacophonyHelper"
+    COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
         "${CACOPHONY_APP}"
     DEPENDS CacophonyDriver icon
     COMMENT "Building Cacophony.app"
@@ -91,9 +101,15 @@ if(NOTARY_PROFILE)
     endif()
 
     add_custom_target(notarize
+        # The HAL plug-in is loaded inside coreaudiod; keep it timestamped
+        # without hardened runtime, which can interfere with plug-in loading.
+        COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
+            --timestamp
+            "${CACOPHONY_APP}/Contents/Resources/CacophonyDriver.driver"
         COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
             --timestamp --options runtime
-            "${CACOPHONY_APP}/Contents/Resources/CacophonyDriver.driver"
+            --identifier com.stonerl.Cacophony.Helper
+            "${CACOPHONY_APP}/Contents/MacOS/CacophonyHelper"
         COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
             --timestamp --options runtime
             "${CACOPHONY_APP}"
@@ -119,20 +135,6 @@ if(NOTARY_PROFILE)
 else()
     message(STATUS "Notarize target disabled; set -DNOTARY_PROFILE=<profile> to enable it")
 endif()
-
-add_custom_target(install-driver
-    COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --component driver
-    COMMENT "Installing the HAL driver; run this target with sudo"
-    USES_TERMINAL
-)
-
-add_custom_target(uninstall-driver
-    COMMAND "${CMAKE_COMMAND}" -E rm -rf
-        "/Library/Audio/Plug-Ins/HAL/CacophonyDriver.driver"
-    COMMAND /bin/launchctl kickstart -k system/com.apple.audio.coreaudiod
-    COMMENT "Removing the HAL driver; run this target with sudo"
-    USES_TERMINAL
-)
 
 add_custom_target(icon
     COMMAND "${CMAKE_COMMAND}" -E rm -rf
@@ -173,19 +175,3 @@ add_custom_target(icon
     VERBATIM
     USES_TERMINAL
 )
-
-install(TARGETS CacophonyDriver
-    BUNDLE DESTINATION "/Library/Audio/Plug-Ins/HAL"
-    LIBRARY DESTINATION "/Library/Audio/Plug-Ins/HAL"
-    COMPONENT driver
-)
-
-install(CODE [[
-    execute_process(
-        COMMAND /bin/launchctl kickstart -k system/com.apple.audio.coreaudiod
-        RESULT_VARIABLE CACOPHONY_LAUNCHCTL_RESULT
-    )
-    if(NOT CACOPHONY_LAUNCHCTL_RESULT EQUAL 0)
-        execute_process(COMMAND /usr/bin/killall -9 coreaudiod)
-    endif()
-]] COMPONENT driver)

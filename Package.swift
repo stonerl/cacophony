@@ -20,9 +20,18 @@ let package = Package(
             path: "Sources/CacophonyProtocol",
             publicHeadersPath: "."
         ),
+        .target(
+            name: "CacophonyHelperProtocol",
+            path: "Sources/CacophonyHelperProtocol"
+        ),
+        .executableTarget(
+            name: "CacophonyHelper",
+            dependencies: ["CacophonyHelperProtocol"],
+            path: "Sources/CacophonyHelper"
+        ),
         .executableTarget(
             name: "cacophony",
-            dependencies: ["CacophonyRouting", "CacophonyProtocol"],
+            dependencies: ["CacophonyRouting", "CacophonyProtocol", "CacophonyHelperProtocol"],
             path: "Sources/Cacophony"
         ),
     ]

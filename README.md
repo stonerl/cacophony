@@ -63,20 +63,14 @@ repository.
 
 ## Install the driver
 
-From the menu bar panel: **Install Driver…** and approve the admin prompt.
-The app restarts `coreaudiod`, so audio stops for a moment. Cacophony detects the device automatically; no app restart is needed.
+From the menu bar panel: **Install Driver…**. Cacophony registers a background
+helper; if macOS asks, approve Cacophony in System Settings > General > Login
+Items & Extensions. Core Audio restarts, so audio stops briefly. Cacophony
+detects the device automatically; no app restart is needed.
 
-Or install from Terminal with CMake:
-
-```sh
-sudo cmake --build build --target install-driver
-```
-
-Uninstall with the **Uninstall Driver…** button or:
-
-```sh
-sudo cmake --build build --target uninstall-driver
-```
+The SMAppService helper is most reliable when `Cacophony.app` is in
+`/Applications`. Apps containing LaunchDaemons must be notarized, so build the
+notarized package before testing the in-app installer.
 
 ## Use
 
@@ -131,7 +125,7 @@ The protocol header lives in `Sources/CacophonyProtocol/include/CacophonyProtoco
   silent. Use Launch at Login, and quit from the menu so the previous output is
   restored.
 - The driver installs into `/Library/Audio/Plug-Ins/HAL` and requires admin
-  rights. Installing or updating it restarts `coreaudiod`.
+  rights. Installing or updating it restarts Core Audio.
 
 ## Why not an AUv3 plug-in?
 
