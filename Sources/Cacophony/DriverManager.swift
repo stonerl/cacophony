@@ -55,7 +55,7 @@ enum DriverManager {
     }
 
     static var bundledDriverURL: URL? {
-        Bundle.main.url(forResource: "CacophonyDriver", withExtension: "driver")
+        Bundle.main.url(forResource: "CacophonyAudio", withExtension: "driver")
     }
 
     static var bundledVersion: String? {

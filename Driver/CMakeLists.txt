@@ -1,6 +1,6 @@
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     cmake_minimum_required(VERSION 3.28)
-    project(CacophonyDriver LANGUAGES CXX)
+    project(CacophonyAudio LANGUAGES CXX)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
@@ -11,7 +11,7 @@ if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0")
 endif()
 
-set(DRIVER_NAME "CacophonyDriver")
+set(DRIVER_NAME "CacophonyAudio")
 if(NOT CACOPHONY_VERSION)
   set(CACOPHONY_VERSION "0.1.0")
 endif()
@@ -19,7 +19,7 @@ set(DRIVER_VERSION "${CACOPHONY_VERSION}")
 set(DRIVER_COPYRIGHT "Copyright © 2026 Toni Förster")
 set(DRIVER_IDENTIFIER "com.stonerl.Cacophony.Driver")
 set(DRIVER_UID "A7E4C1D2-3B5F-4A6C-8D9E-0F1A2B3C4D5E")
-set(DRIVER_ENTRYPOINT "CacophonyDriverEntryPoint")
+set(DRIVER_ENTRYPOINT "CacophonyAudioEntryPoint")
 
 set(LIBASPL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../Vendor/libASPL" CACHE PATH "libASPL source directory")
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
@@ -34,7 +34,7 @@ if(POLICY CMP0175)
 endif()
 
 add_library(${DRIVER_NAME} MODULE
-  "CacophonyDriver.cpp"
+  "CacophonyAudio.cpp"
   )
 
 target_include_directories(${DRIVER_NAME} PRIVATE

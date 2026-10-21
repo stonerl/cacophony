@@ -91,7 +91,7 @@ as the output.
 ## Architecture
 
 ```
-Apps → CacophonyDriver.driver (CoreAudio HAL plugin, in coreaudiod)
+Apps → CacophonyAudio.driver (CoreAudio HAL plugin, in coreaudiod)
         │ localhost UDP, 48 kHz stereo Float32, sequence + timestamps
         ▼
    Cacophony.app (menu bar helper)

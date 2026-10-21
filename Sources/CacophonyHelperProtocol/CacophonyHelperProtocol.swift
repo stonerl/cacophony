@@ -3,7 +3,7 @@ import Foundation
 public enum CacophonyHelperConstants {
     public static let machServiceName = "com.stonerl.Cacophony.Helper"
     public static let launchDaemonPlistName = "com.stonerl.Cacophony.Helper.plist"
-    public static let driverName = "CacophonyDriver.driver"
+    public static let driverName = "CacophonyAudio.driver"
     public static let halDirectoryPath = "/Library/Audio/Plug-Ins/HAL"
 }
 

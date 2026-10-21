@@ -182,7 +182,7 @@ std::shared_ptr<aspl::Driver> CreateDriver()
 
 } // namespace
 
-extern "C" void* CacophonyDriverEntryPoint(CFAllocatorRef allocator, CFUUIDRef typeUUID)
+extern "C" void* CacophonyAudioEntryPoint(CFAllocatorRef allocator, CFUUIDRef typeUUID)
 {
     (void)allocator;
 

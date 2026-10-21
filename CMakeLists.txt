@@ -80,16 +80,16 @@ add_custom_target(app
         "${CMAKE_BINARY_DIR}/generated/Info.plist"
         "${CACOPHONY_APP}/Contents/Info.plist"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "$<TARGET_BUNDLE_DIR:CacophonyDriver>"
-        "${CACOPHONY_APP}/Contents/Resources/CacophonyDriver.driver"
+        "$<TARGET_BUNDLE_DIR:CacophonyAudio>"
+        "${CACOPHONY_APP}/Contents/Resources/CacophonyAudio.driver"
     COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
-        "${CACOPHONY_APP}/Contents/Resources/CacophonyDriver.driver"
+        "${CACOPHONY_APP}/Contents/Resources/CacophonyAudio.driver"
     COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
         --identifier com.stonerl.Cacophony.Helper
         "${CACOPHONY_APP}/Contents/MacOS/CacophonyHelper"
     COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
         "${CACOPHONY_APP}"
-    DEPENDS CacophonyDriver icon
+    DEPENDS CacophonyAudio icon
     COMMENT "Building Cacophony.app"
     VERBATIM
     USES_TERMINAL
@@ -105,7 +105,7 @@ if(NOTARY_PROFILE)
         # without hardened runtime, which can interfere with plug-in loading.
         COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
             --timestamp
-            "${CACOPHONY_APP}/Contents/Resources/CacophonyDriver.driver"
+            "${CACOPHONY_APP}/Contents/Resources/CacophonyAudio.driver"
         COMMAND "${CODESIGN_EXECUTABLE}" --force --sign "${CODESIGN_ID}"
             --timestamp --options runtime
             --identifier com.stonerl.Cacophony.Helper
