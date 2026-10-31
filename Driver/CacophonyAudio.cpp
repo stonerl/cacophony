@@ -148,6 +148,9 @@ std::shared_ptr<aspl::Driver> CreateDriver()
     deviceParams.CanBeDefaultForSystemSounds = true;
     deviceParams.SampleRate = kSampleRate;
     deviceParams.ChannelCount = kChannelCount;
+    // Device latency stays 0: the AirPlay engine adds the default output
+    // device's latency to the speakers' delay, so reporting it there would
+    // push the speakers back by the same amount. See streamParams.Latency.
     deviceParams.Latency = 0;
     deviceParams.SafetyOffset = 0;
     deviceParams.EnableMixing = true;
@@ -156,7 +159,9 @@ std::shared_ptr<aspl::Driver> CreateDriver()
 
     aspl::StreamParameters streamParams;
     streamParams.Direction = aspl::Direction::Output;
-    streamParams.Latency = 0;
+    // The app holds the AirPlay stream this far behind the driver. Players
+    // add stream latency to device latency, so this lets them delay video.
+    streamParams.Latency = CACOPHONY_OUTPUT_LATENCY_FRAMES;
     streamParams.Format.mSampleRate = static_cast<Float64>(kSampleRate);
     streamParams.Format.mFormatID = kAudioFormatLinearPCM;
     streamParams.Format.mFormatFlags =

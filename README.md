@@ -164,6 +164,10 @@ Apps → CacophonyAudio.driver (CoreAudio HAL plugin, in coreaudiod)
   `AVSampleBufferAudioRenderer` attached to a private `AVOutputContext`.
   `airplayd` owns the AirPlay 2 session, buffering, pairing, and multi-room
   synchronization.
+- **Latency** – the app holds the stream 0.5 s behind the driver, and the
+  driver reports that as stream latency so players can delay video. Device
+  latency would not work: the AirPlay engine adds the default output's
+  device latency to the speakers' delay, which doubles it.
 - **Speaker picker** – `AVRoutePickerView` plus the private
   `setOutputContextID:` SPI. The picker runs in Apple's entitled
   `AirPlayUIAgent`; that is how an unentitled app can select HomePods.
@@ -181,7 +185,7 @@ The protocol header lives in `Sources/CacophonyProtocol/include/CacophonyProtoco
 ## Limitations
 
 - Uses private `AVOutputContext` APIs and route-picker SPI; may break on future macOS releases.
-- AirPlay adds roughly two seconds of buffering, so it is not suitable for video or gaming.
+- Audio plays about half a second late. Cacophony reports the delay to macOS, so video players that account for output latency (Chrome, AVFoundation-based players) stay in sync, but games and other interactive audio lag.
 - Speaker selections cannot be restored programmatically; choose speakers again after restarting Cacophony. Keeping Cacophony running avoids this.
 - If Cacophony is the system output and the app is not running, audio is silent. Launch at Login is enabled by default; quit from the menu so the previous output is restored.
 - The driver installs into `/Library/Audio/Plug-Ins/HAL` and requires administrator approval. Installing or updating it restarts Core Audio.

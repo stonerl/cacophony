@@ -16,6 +16,12 @@ extern "C" {
 #define CACOPHONY_CHANNELS 2u
 #define CACOPHONY_PACKET_MAX_FRAMES 1024u
 
+/// Output latency the driver reports to macOS, in frames (500 ms). The app
+/// holds the AirPlay stream at this delay so players can sync video to it.
+/// Reported as stream latency: the AirPlay engine adds the default output's
+/// device latency to the speakers' delay, but ignores stream latency.
+#define CACOPHONY_OUTPUT_LATENCY_FRAMES 24000u
+
 /// Float32, interleaved, native endian.
 #define CACOPHONY_FORMAT_FLOAT32_INTERLEAVED 0u
 

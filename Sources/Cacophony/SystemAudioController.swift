@@ -1,5 +1,6 @@
 import CacophonyRouting
 import AVFoundation
+import CoreAudio
 import Darwin
 import Foundation
 import Synchronization
@@ -285,8 +286,49 @@ final class SystemAudioController: @unchecked Sendable {
         if let output, now - lastStatsLog >= 10 {
             lastStatsLog = now
             let snapshot = receiveStats.snapshot()
-            alog("stats packets=\(snapshot.packets) frames=\(snapshot.frames) gaps=\(snapshot.gaps) peak=\(String(format: "%.3f", snapshot.peak)) ringEmpty=\(output.ringEmptyTicks.load(ordering: .relaxed)) enqueued=\(output.enqueuedFrames)")
+            let latency = output.latencySnapshot()
+            alog("stats packets=\(snapshot.packets) frames=\(snapshot.frames) gaps=\(snapshot.gaps) peak=\(String(format: "%.3f", snapshot.peak)) ringEmpty=\(output.ringEmptyTicks.load(ordering: .relaxed)) enqueued=\(output.enqueuedFrames) delay=\(String(format: "%.3f", latency.total))s (lead \(String(format: "%.3f", latency.lead)), ring \(String(format: "%.3f", latency.ring))) padded=\(output.paddedFrames.load(ordering: .relaxed)) dropped=\(output.droppedFrames.load(ordering: .relaxed))")
         }
+    }
+
+    /// Time from the driver to the speakers beyond the renderer lead: ring
+    /// residency (up to one 20 ms chunk plus a pump interval) and AirPlay's
+    /// own output path. Measured at about 30 ms.
+    private static let pipelineOverhead = 0.03
+
+    /// Lead used when the installed driver reports no latency (older drivers).
+    private static let legacyLead = 0.5
+
+    /// Below this the AirPlay engine underruns and rebuffers (measured
+    /// unstable at 50 ms, stable at 250 ms).
+    private static let minimumLead = 0.25
+
+    /// Output latency the driver reports to players: device plus stream
+    /// latency, in seconds. Nil when the driver is missing or reports none.
+    private static func reportedLatency() -> Double? {
+        guard let device = DriverManager.device else { return nil }
+        let deviceFrames: UInt32 = (try? device.read(
+            kAudioDevicePropertyLatency,
+            scope: kAudioObjectPropertyScopeOutput,
+            initialValue: 0
+        )) ?? 0
+        var streamFrames: UInt32 = 0
+        if let streams: [AudioStreamID] = try? device.readArray(
+            kAudioDevicePropertyStreams,
+            scope: kAudioObjectPropertyScopeOutput
+        ), let stream = streams.first {
+            streamFrames = (try? stream.read(kAudioStreamPropertyLatency, initialValue: 0)) ?? 0
+        }
+        let frames = deviceFrames + streamFrames
+        guard frames > 0 else { return nil }
+        return Double(frames) / Double(CACOPHONY_SAMPLE_RATE)
+    }
+
+    /// The renderer lead that makes the speakers play audio exactly the
+    /// driver's reported latency after the driver received it.
+    private static func targetLead() -> Double {
+        guard let reported = reportedLatency() else { return legacyLead }
+        return max(minimumLead, reported - pipelineOverhead)
     }
 
     private func startOutput() {
@@ -295,7 +337,7 @@ final class SystemAudioController: @unchecked Sendable {
         expectedSampleTime = nil
         stateLock.unlock()
         do {
-            let output = RendererOutput(format: format, ring: ring)
+            let output = RendererOutput(format: format, ring: ring, targetLead: Self.targetLead())
             try output.start()
             if CACRendererSetOutputContext(output.renderer, context) {
                 lastError = nil
@@ -305,7 +347,7 @@ final class SystemAudioController: @unchecked Sendable {
             self.output = output
             lastEnqueuedFrames = 0
             lastEnqueuedProgressAt = ProcessInfo.processInfo.systemUptime
-            alog("Cacophony streaming to \(routedDeviceNames.joined(separator: " + "))")
+            alog("Cacophony streaming to \(routedDeviceNames.joined(separator: " + ")) with \(String(format: "%.3f", output.targetLead))s lead")
         } catch {
             lastError = "\(error)"
             alog("Cacophony renderer start failed: \(error)")
