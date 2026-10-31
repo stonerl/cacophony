@@ -285,9 +285,13 @@ final class SystemAudioController: @unchecked Sendable {
         if let output, now - lastStatsLog >= 10 {
             lastStatsLog = now
             let snapshot = receiveStats.snapshot()
-            alog("stats packets=\(snapshot.packets) frames=\(snapshot.frames) gaps=\(snapshot.gaps) peak=\(String(format: "%.3f", snapshot.peak)) ringEmpty=\(output.ringEmptyTicks.load(ordering: .relaxed)) enqueued=\(output.enqueuedFrames)")
+            let latency = output.latencySnapshot()
+            alog("stats packets=\(snapshot.packets) frames=\(snapshot.frames) gaps=\(snapshot.gaps) peak=\(String(format: "%.3f", snapshot.peak)) ringEmpty=\(output.ringEmptyTicks.load(ordering: .relaxed)) enqueued=\(output.enqueuedFrames) delay=\(String(format: "%.3f", latency.total))s (lead \(String(format: "%.3f", latency.lead)), ring \(String(format: "%.3f", latency.ring))) padded=\(output.paddedFrames.load(ordering: .relaxed)) dropped=\(output.droppedFrames.load(ordering: .relaxed))")
         }
     }
+
+    /// Delay the AirPlay stream is held at, from the driver to the speakers.
+    private static let streamLead = 0.5
 
     private func startOutput() {
         ring.reset()
@@ -295,7 +299,7 @@ final class SystemAudioController: @unchecked Sendable {
         expectedSampleTime = nil
         stateLock.unlock()
         do {
-            let output = RendererOutput(format: format, ring: ring)
+            let output = RendererOutput(format: format, ring: ring, targetLead: Self.streamLead)
             try output.start()
             if CACRendererSetOutputContext(output.renderer, context) {
                 lastError = nil
@@ -305,7 +309,7 @@ final class SystemAudioController: @unchecked Sendable {
             self.output = output
             lastEnqueuedFrames = 0
             lastEnqueuedProgressAt = ProcessInfo.processInfo.systemUptime
-            alog("Cacophony streaming to \(routedDeviceNames.joined(separator: " + "))")
+            alog("Cacophony streaming to \(routedDeviceNames.joined(separator: " + ")) with \(String(format: "%.3f", output.targetLead))s lead")
         } catch {
             lastError = "\(error)"
             alog("Cacophony renderer start failed: \(error)")

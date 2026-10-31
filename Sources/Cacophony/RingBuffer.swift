@@ -89,6 +89,27 @@ final class RingBuffer: @unchecked Sendable {
         }
     }
 
+    /// Discards up to frameCount of the oldest buffered frames from the
+    /// reader side. Safe while the writer runs; returns the frames dropped.
+    @discardableResult
+    func skip(frameCount: Int) -> Int {
+        guard frameCount > 0 else { return 0 }
+        var current = readIndex.load(ordering: .acquiring)
+        while true {
+            let available = writeIndex.load(ordering: .acquiring) - current
+            let dropped = min(frameCount, available)
+            guard dropped > 0 else { return 0 }
+            let result = readIndex.compareExchange(
+                expected: current,
+                desired: current + dropped,
+                successOrdering: .releasing,
+                failureOrdering: .acquiring
+            )
+            if result.exchanged { return dropped }
+            current = result.original
+        }
+    }
+
     /// Discards buffered frames. Only safe while neither side is running.
     func reset() {
         readIndex.store(writeIndex.load(ordering: .acquiring), ordering: .releasing)
