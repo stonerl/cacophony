@@ -23,7 +23,8 @@ struct LatencySnapshot {
 /// driver to the speakers is how far the enqueued timeline runs ahead of the
 /// synchronizer clock. The output holds that lead at `targetLead`: silence
 /// covers gaps in the driver stream, and audio that would push the lead past
-/// the target is dropped.
+/// the target is dropped. The driver reports the same delay to macOS, which
+/// is what lets players keep video in sync.
 final class RendererOutput {
     let renderer = AVSampleBufferAudioRenderer()
     private let synchronizer = AVSampleBufferRenderSynchronizer()
